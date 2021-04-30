@@ -1,0 +1,5 @@
+build
+gen
+bin
+go.mod
+go.sum
