@@ -63,7 +63,6 @@ func (d *DiskUtilityCmd) Info(id string) (out string, err error) {
 // RepairDisk uses the macOS diskutil diskRepair command to repair the specified volume and get updated information
 // (e.g. amount of free space).
 func (d *DiskUtilityCmd) RepairDisk(id string) (out string, err error) {
-	// TODO: this will need to be versioned for mojave and catalina/big sur since mojave uses bash
 	// cmdRepairDisk represents the command used for executing macOS's diskutil to repair a disk
 	// this is done by having zsh directly execute the diskutil command and provide "yes" to skip manual typing
 	//   * repairDisk - indicates that a disk is going to be repaired (used to fetch amount of free space)
