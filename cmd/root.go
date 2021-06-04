@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -15,6 +16,7 @@ var CommitDate string
 var Version string
 
 // Persistent flag variables
+// TODO: Add a proper logger
 var Verbose bool
 
 // rootCmd represents the base command when called without any subcommands
@@ -24,13 +26,16 @@ var rootCmd = &cobra.Command{
 	Long: `EC2 macOS Utils provides utilities for EC2 macOS instances. 
 These utilities provide quick access to a variety of automation steps 
 for configuring mac1.metal instances.`,
-	Version: Version,
+	Version:      Version,
+	SilenceUsage: true,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	cobra.CheckErr(rootCmd.Execute())
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
 
 // init initializes the root command, all sub-commands, and sets flags

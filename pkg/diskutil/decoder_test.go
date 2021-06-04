@@ -342,51 +342,6 @@ var (
 	}
 )
 
-func TestDecodeContainer(t *testing.T) {
-	for _, tt := range containerTests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotContainerInfo, err := DecodeContainer(tt.args.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeContainer() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotContainerInfo, tt.wantContainer) {
-				t.Errorf("DecodeContainer() gotContainerInfo = %#v, want %#v", gotContainerInfo, tt.wantContainer)
-			}
-		})
-	}
-}
-
-func TestDecodeDisk(t *testing.T) {
-	for _, tt := range diskTests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotDiskInfo, err := DecodeDisk(tt.args.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeDisk() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotDiskInfo, tt.wantDisk) {
-				t.Errorf("DecodeDisk() gotDiskInfo = %#v, want %#v", gotDiskInfo, tt.wantDisk)
-			}
-		})
-	}
-}
-
-func TestDecodeList(t *testing.T) {
-	for _, tt := range listTests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotPartitions, err := DecodeList(tt.args.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeList() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotPartitions, tt.wantPartitions) {
-				t.Errorf("DecodeList() gotPartitions = %#v, want %#v", gotPartitions, tt.wantPartitions)
-			}
-		})
-	}
-}
-
 func TestDecoder_DecodeContainer(t *testing.T) {
 	for _, tt := range containerTests {
 		t.Run(tt.name, func(t *testing.T) {

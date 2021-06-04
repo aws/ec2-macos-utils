@@ -1,12 +1,14 @@
 package diskutil
 
+//go:generate mockgen -destination=mocks/mock_wrapper.go github.com/aws/ec2-macos-utils/pkg/diskutil DiskUtility
+
 import (
 	"fmt"
 
 	"github.com/aws/ec2-macos-utils/pkg/util"
 )
 
-// DiskUtility outlines the functionality necessary for wrapping macOS's diskutil.
+// DiskUtility outlines the functionality necessary for wrapping macOS's diskutil tool.
 type DiskUtility interface {
 	List(args []string) (out string, err error)
 	Info(id string) (out string, err error)
@@ -54,7 +56,7 @@ func (d *DiskUtilityCmd) Info(id string) (out string, err error) {
 	// Execute the diskutil info command and store the output
 	cmdOut, err := util.ExecuteCommand(cmdDiskInfo, "", []string{})
 	if err != nil {
-		return cmdOut.Stdout, fmt.Errorf("failed to run diskutil command to fetch disk information, stderr: [%s]: %v", cmdOut.Stderr, err)
+		return cmdOut.Stdout, fmt.Errorf("diskutil: failed to run diskutil command to fetch disk information, stderr: [%s]: %v", cmdOut.Stderr, err)
 	}
 
 	return cmdOut.Stdout, nil
@@ -72,7 +74,7 @@ func (d *DiskUtilityCmd) RepairDisk(id string) (out string, err error) {
 	// Execute the diskutil repairDisk command and store the output
 	cmdOut, err := util.ExecuteCommand(cmdRepairDisk, "", []string{})
 	if err != nil {
-		return cmdOut.Stdout, fmt.Errorf("failed to run diskutil command to repair the disk, stderr: [%s]: %v", cmdOut.Stderr, err)
+		return cmdOut.Stdout, fmt.Errorf("diskutil: failed to run diskutil command to repair the disk, stderr: [%s]: %v", cmdOut.Stderr, err)
 	}
 
 	return cmdOut.Stdout, nil
@@ -90,7 +92,7 @@ func (d *DiskUtilityCmd) ResizeContainer(id, size string) (out string, err error
 	// Execute the diskutil apfs resizeContainer command and store the output
 	cmdOut, err := util.ExecuteCommand(cmdResizeContainer, "", []string{})
 	if err != nil {
-		return cmdOut.Stdout, fmt.Errorf("failed to run diskutil command to resize the container, stderr [%s]: %v", cmdOut.Stderr, err)
+		return cmdOut.Stdout, fmt.Errorf("diskutil: failed to run diskutil command to resize the container, stderr [%s]: %v", cmdOut.Stderr, err)
 	}
 
 	return cmdOut.Stdout, nil

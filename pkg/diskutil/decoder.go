@@ -7,7 +7,7 @@ import (
 	"howett.net/plist"
 )
 
-// PlistDecoder outlines the functionality necessary for decoding plist output from macOS's diskutil.
+// PlistDecoder outlines the functionality necessary for decoding plist output from the macOS diskutil command.
 type PlistDecoder interface {
 	DecodeList(rawDiskList string) (partitions *SystemPartitions, err error)
 	DecodeDisk(rawDisk string) (diskInfo *DiskInfo, err error)
@@ -24,11 +24,11 @@ func (d *Decoder) DecodeList(rawList string) (partitions *SystemPartitions, err 
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
 			partitions = nil
-			err = fmt.Errorf("panic occured while decoding: %s", panicErr)
+			err = fmt.Errorf("diskutil: panic occured while decoding: %s", panicErr)
 		}
 	}()
 
-	// Create a reader from the raw data and create a new decoder
+	// Create a reader from the raw data and create a new Decoder
 	partitions = &SystemPartitions{}
 	outputReader := bytes.NewReader([]byte(rawList))
 	decoder := plist.NewDecoder(outputReader)
@@ -36,7 +36,7 @@ func (d *Decoder) DecodeList(rawList string) (partitions *SystemPartitions, err 
 	// Decode the plist output from diskutil into a SystemPartitions struct for easier access
 	err = decoder.Decode(partitions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode diskutil list disks output: %v", err)
+		return nil, fmt.Errorf("diskutil: failed to decode diskutil list disks output: %v", err)
 	}
 
 	return partitions, nil
@@ -49,11 +49,11 @@ func (d *Decoder) DecodeDisk(rawDisk string) (disk *DiskInfo, err error) {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
 			disk = nil
-			err = fmt.Errorf("panic occured while decoding: %s", panicErr)
+			err = fmt.Errorf("diskutil: panic occured while decoding: %s", panicErr)
 		}
 	}()
 
-	// Create a reader from the raw data and create a new decoder
+	// Create a reader from the raw data and create a new Decoder
 	disk = &DiskInfo{}
 	outputReader := bytes.NewReader([]byte(rawDisk))
 	decoder := plist.NewDecoder(outputReader)
@@ -61,7 +61,7 @@ func (d *Decoder) DecodeDisk(rawDisk string) (disk *DiskInfo, err error) {
 	// Decode the plist output from diskutil into a DiskInfo struct for easier access
 	err = decoder.Decode(disk)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode diskutil disk info output: %v", err)
+		return nil, fmt.Errorf("diskutil: failed to decode diskutil disk info output: %v", err)
 	}
 
 	return disk, nil
@@ -74,11 +74,11 @@ func (d *Decoder) DecodeContainer(rawContainer string) (container *ContainerInfo
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
 			container = nil
-			err = fmt.Errorf("panic occured while decoding: %s", panicErr)
+			err = fmt.Errorf("diskutil: panic occured while decoding: %s", panicErr)
 		}
 	}()
 
-	// Create a reader from the raw data and create a new decoder
+	// Create a reader from the raw data and create a new Decoder
 	container = &ContainerInfo{}
 	outputReader := bytes.NewReader([]byte(rawContainer))
 	decoder := plist.NewDecoder(outputReader)
@@ -86,29 +86,8 @@ func (d *Decoder) DecodeContainer(rawContainer string) (container *ContainerInfo
 	// Decode the plist output from diskutil into a DiskInfo struct for easier access
 	err = decoder.Decode(container)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode diskutil container info output: %v", err)
+		return nil, fmt.Errorf("diskutil: failed to decode diskutil container info output: %v", err)
 	}
 
 	return container, err
-}
-
-// defaultDecoder provides package functions for the PlistDecoder interface.
-var defaultDecoder Decoder
-
-// DecodeList takes a string containing the raw plist data for all disks and partition information
-// and decodes it into a new SystemPartitions struct.
-func DecodeList(rawList string) (partitions *SystemPartitions, err error) {
-	return defaultDecoder.DecodeList(rawList)
-}
-
-// DecodeDisk takes a string containing the raw plist data for disk information and decodes it into
-// a new DiskInfo struct.
-func DecodeDisk(rawDisk string) (disk *DiskInfo, err error) {
-	return defaultDecoder.DecodeDisk(rawDisk)
-}
-
-// DecodeContainer takes a string containing the raw plist data for container/file system information
-// and decodes it into a new ContainerInfo struct.
-func DecodeContainer(rawContainer string) (container *ContainerInfo, err error) {
-	return defaultDecoder.DecodeContainer(rawContainer)
 }

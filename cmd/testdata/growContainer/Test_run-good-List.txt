@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>AllDisks</key>
+        <array>
+                <string>disk0</string>
+                <string>disk0s1</string>
+                <string>disk0s2</string>
+                <string>disk1</string>
+        </array>
+        <key>AllDisksAndPartitions</key>
+        <array>
+                <dict>
+                        <key>DeviceIdentifier</key>
+                        <string>disk0</string>
+                        <key>Partitions</key>
+                        <array>
+                                <dict>
+                                        <key>Size</key>
+                                        <integer>210000000</integer>
+                                </dict>
+                                <dict>
+                                        <key>Size</key>
+                                        <integer>132000000000</integer>
+                                </dict>
+                        </array>
+                        <key>Size</key>
+                        <integer>200000000000</integer>
+                </dict>
+        </array>
+</dict>
+</plist>
