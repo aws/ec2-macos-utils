@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 
 	"github.com/aws/ec2-macos-utils/pkg/diskutil"
 	"github.com/dustin/go-humanize"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -17,20 +17,13 @@ const (
 	MinimumGrowSpaceRequired = 1000000
 )
 
-// MinimumGrowSpaceError defines an error to distinguish when there's not enough space to grow the specified container.
-type MinimumGrowSpaceError struct {
-	message string
-}
+var (
+	// ContainerID is the identifier for the container to be resized or "root"
+	ContainerID string
+)
 
-// Error provides the implementation for the error interface.
-func (e MinimumGrowSpaceError) Error() string {
-	return e.message
-}
-
-// Persistent flag variables
-var ContainerID string // ContainerID is the identifier for the container to be resized or "root"
-
-// growContainerCmd represents the grow command which provides functionality for growing APFS containers to their maximum size.
+// growContainerCmd represents the grow command which provides functionality for growing APFS containers
+// to their maximum size.
 var growContainerCmd = &cobra.Command{
 	Use:   "grow",
 	Short: "Resizes a container to its maximum size",
@@ -52,6 +45,16 @@ until the instance has been restarted.`,
 	},
 }
 
+// MinimumGrowSpaceError defines an error to distinguish when there's not enough space to grow the specified container.
+type MinimumGrowSpaceError struct {
+	message string
+}
+
+// Error provides the implementation for the error interface.
+func (e MinimumGrowSpaceError) Error() string {
+	return e.message
+}
+
 // init initializes the resizeContainer command, all sub-commands, and sets their respective flags.
 func init() {
 	// Define flags used in the resize container command
@@ -68,8 +71,8 @@ func init() {
 
 // run is the the main runner for the grow command. It performs the following operations:
 //   1. Fetch the full list of system disks and partitions.
-//   2. Validate the given ContainerID exists.
-//   3. Fetch the disk information for the provided ContainerID.
+//   2. Validate the given id exists.
+//   3. Fetch the disk information for the provided id.
 //   4. Fetch the container's parent disk information.
 //   5. Check if there's enough available space to execute diskutil's resizeContainer command.
 //   6. Attempt to repair the container's parent disk.
@@ -77,54 +80,67 @@ func init() {
 //   8. Fetch the latest disk information for the container to output its new size.
 func run(utility diskutil.DiskUtil, id string) (err error) {
 	// Get the list of all disks and partitions in the system
-	log.Println("Fetching all disk and partition information...")
 	var args []string
+	logrus.Info("Fetching all disk and partition information...")
 	partitions, err := utility.List(args)
 	if err != nil {
-		return fmt.Errorf("failed to fetch all disk and partition information: %v", err)
+		return fmt.Errorf("failed to fetch all disk and partition information: %w", err)
 	}
+	logrus.WithField("partitions", partitions).Debug("Found partition information")
 
-	// Setup the disk pointer to be initialized based on the contents of ContainerID
+	// Setup the disk pointer to be initialized based on the contents of id
 	var disk *diskutil.DiskInfo
 
-	// Check if the ContainerID flag is "root", an identifier (e.g. disk1), or node (e.g. /dev/disk1)
+	// Check if the id flag is "root", an identifier (e.g. disk1), or node (e.g. /dev/disk1)
+	logrus.WithField("id", id).Debug("Checking if device ID is \"root\"")
 	if strings.EqualFold(id, "root") {
-		log.Println("Searching for root container to resize...")
+		logrus.Info("Searching for root container to resize...")
 		rootContainer, err := rootContainer(utility)
 		if err != nil {
 			return err
 		}
+		logrus.WithField("rootContainer", rootContainer).Debug("Found root information")
 
 		disk = &rootContainer.DiskInfo
+		logrus.WithField("disk", disk).Debug("Set disk information")
 	} else {
 		// Check that the given container ID is valid
-		log.Printf("Validating container ID [%s]...\n", id)
+		logrus.WithField("id", id).Info("Validating container ID...")
 		valid, err := validateDeviceID(id, partitions)
 		if err != nil {
-			return err
+			logrus.WithError(err).WithField("id", id).Fatal("Error validating container ID")
 		}
 		if !valid {
-			return fmt.Errorf("ContainerID [%s] is not a valid ID", id)
+			logrus.WithField("id", id).Fatal("Container ID is not a valid device ID")
 		}
+		logrus.WithField("id", id).Info("Container ID is valid")
 
 		// Get the disk information for the container
-		log.Println("Fetching disk information...")
+		logrus.Info("Fetching disk information...")
 		disk, err = utility.InfoDisk(id)
 		if err != nil {
-			return err
+			logrus.WithError(err).Fatal("Error fetching disk information")
 		}
+		logrus.WithField("disk", disk).Debug("Found disk information")
 	}
-	log.Printf("Found [%s], size [%s]\n", disk.DeviceIdentifier, humanize.Bytes(disk.Size))
+	logrus.WithFields(logrus.Fields{
+		"id":   disk.DeviceIdentifier,
+		"size": humanize.Bytes(disk.Size),
+	}).Info("Successfully loaded disk information")
 
 	// Attempt to resize the container
-	log.Printf("Attempting to grow container [%s]...\n", disk.DeviceIdentifier)
+	logrus.Info("Attempting to grow container...")
 	message, err := growContainer(disk, partitions, utility)
 	if err != nil {
-		log.Printf("Error encountered while growing container [%s], message: %s\n", disk.DeviceIdentifier, message)
+		// Check if the error is a MinimumGrowSpaceError and return without an error if it is
+		if _, ok := err.(MinimumGrowSpaceError); ok {
+			logrus.WithError(err).Warn("Could not grow the container")
+			return nil
+		}
 
-		return err
+		logrus.WithError(err).Fatalf("Error growing the container, message: %s", message)
 	}
-	log.Printf("Completed with message: %s\n", message)
+	logrus.Infof("Successfully completed with message: %s", message)
 
 	return nil
 }
@@ -132,74 +148,77 @@ func run(utility diskutil.DiskUtil, id string) (err error) {
 // growContainer grows a container to its maximum size given an ID.
 func growContainer(disk *diskutil.DiskInfo, partitions *diskutil.SystemPartitions, utility diskutil.DiskUtil) (message string, err error) {
 	// Check if there disk has a physical store that should be repaired before resizing
-	log.Println("Checking for a physical store...")
+	logrus.Info("Checking for a physical store...")
 	if disk.APFSPhysicalStores != nil {
-		log.Printf("Disk [%s] has [%d] Physical Store(s)\n", disk.DeviceIdentifier, len(disk.APFSPhysicalStores))
+		logrus.WithField("physical_stores", disk.APFSPhysicalStores).Info("Found physical store(s)")
 
-		log.Println("Attempting to repair the parent device...")
-		out, err := repairParentDisk(disk, partitions, utility)
+		logrus.Info("Attempting to repair the parent disk...")
+		message, err := repairParentDisk(disk, partitions, utility)
 		if err != nil {
-			// Check if the error is a MinimumGrowSpaceError and return without an error if it is
-			if v, ok := err.(MinimumGrowSpaceError); ok {
-				return v.Error(), nil
-			}
-
-			return out, err
+			return message, err
 		}
 	} else {
-		log.Printf("No Physical Stores found for [%s], attempting to continue without repair...\n", disk.DeviceIdentifier)
+		logrus.WithField("disk_id", disk.DeviceIdentifier).Info("No Physical Stores found for disk, attempting to repair...")
 	}
 
 	// Attempt to resize the container to its maximum size
-	log.Printf("Resizing [%s] to use full partition...\n", disk.DeviceIdentifier)
+	logrus.WithField("id", disk.DeviceIdentifier).Info("Resizing the container use full partition...")
 	out, err := utility.ResizeContainer(disk.DeviceIdentifier, "0")
 	if err != nil {
 		return out, err
 	}
+	logrus.WithField("out", out).Debug("Resize output")
+	logrus.Info("Successfully resized the container")
 
 	// Get updated container size
-	log.Println("Fetching updated disk information...")
+	logrus.Info("Fetching updated disk information...")
 	updatedDisk, err := utility.InfoDisk(disk.DeviceIdentifier)
 	if err != nil {
 		return fmt.Sprintf("failed to fetch updated disk information for container [%s]", disk.DeviceIdentifier), err
 	}
-	log.Printf("Found [%s], size [%s]\n", updatedDisk.DeviceIdentifier, humanize.Bytes(updatedDisk.Size))
+	logrus.WithField("updatedDisk", updatedDisk).Debug("Updated disk")
+	logrus.WithFields(logrus.Fields{
+		"id":   updatedDisk.DeviceIdentifier,
+		"size": humanize.Bytes(updatedDisk.Size),
+	}).Info("Successfully loaded updated disk information")
 
-	return fmt.Sprintf("Success, grew container [%s] to size [%s]", disk.DeviceIdentifier, humanize.Bytes(updatedDisk.Size)), nil
+	return fmt.Sprintf("grew container [%s] to size [%s]", disk.DeviceIdentifier, humanize.Bytes(updatedDisk.Size)), nil
 }
 
 // repairParentDisk attempts to find and repair the parent device for the given disk in order to update the current
 // amount of free space available.
 func repairParentDisk(disk *diskutil.DiskInfo, partitions *diskutil.SystemPartitions, utility diskutil.DiskUtil) (message string, err error) {
 	// Get the device identifier for the parent disk
+	logrus.Info("Searching for a parent device...")
 	parentDiskID, err := parentDeviceID(disk)
 	if err != nil {
 		return fmt.Sprintf("failed to get the parent disk ID for container [%s]", disk.DeviceIdentifier), err
 	}
-	log.Printf("Found parent disk [%s]\n", parentDiskID)
 
 	// Get the amount of available free space for the parent disk
-	log.Println("Checking for available space in parent disk...")
+	logrus.WithField("id", parentDiskID).Info("Checking for available space in parent disk...")
 	availableSpace, err := availableDiskSpace(parentDiskID, partitions)
 	if err != nil {
 		return fmt.Sprintf("failed to get available space for disk ID [%s]", parentDiskID), err
 	}
-	log.Printf("Parent disk [%s] has [%s] free space\n", parentDiskID, humanize.Bytes(availableSpace))
+	logrus.WithField("free_space", humanize.Bytes(availableSpace)).Info("Successfully found remaining space")
 
 	// Check if there's enough space to resize the container
 	if availableSpace < MinimumGrowSpaceRequired {
 		err = MinimumGrowSpaceError{
-			message: fmt.Sprintf("Nothing to do, at least [%s] of free space is required to grow the container", humanize.Bytes(MinimumGrowSpaceRequired)),
+			message: fmt.Sprintf("at least [%s] of free space is required to grow the container", humanize.Bytes(MinimumGrowSpaceRequired)),
 		}
 		return "", err
 	}
 
 	// Attempt to repair the container's parent disk
-	log.Println("Repairing the parent disk...")
+	logrus.Info("Repairing the parent disk...")
 	out, err := utility.RepairDisk(parentDiskID)
 	if err != nil {
 		return out, err
 	}
+	logrus.WithField("out", out).Debug("RepairDisk output")
+	logrus.Info("Successfully repaired the parent disk")
 
 	return out, nil
 }

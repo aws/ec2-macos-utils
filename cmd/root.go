@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -11,13 +13,16 @@ const (
 	gitHubLink = "https://github.com/aws/ec2-macos-utils"
 )
 
-// Build time variables
-var CommitDate string
-var Version string
+var (
+	// CommitDate is the date of the latest commit in the repository. This variable gets set at build-time.
+	CommitDate string
 
-// Persistent flag variables
-// TODO: Add a proper logger
-var Verbose bool
+	// Version is the latest version of the utility. This variable gets set at build-time.
+	Version string
+
+	// Verbose is a persistent flag that determines the level of output to be logged.
+	Verbose bool
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -48,6 +53,40 @@ func init() {
 		Version, CommitDate, gitHubLink,
 	))
 
+	// Set the persistent pre-run function to configure things before command execution
+	rootCmd.PersistentPreRunE = configureUtils
+
 	// Set persistent flags
 	rootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "verbose output")
+}
+
+// configureUtils configures everything necessary before ec2-macos-utils runs.
+func configureUtils(cmd *cobra.Command, args []string) error {
+	// Configure the logger
+	err := setupLogger()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupLogger configures logrus to use the desired timestamp format and log level.
+func setupLogger() error {
+	Formatter := new(logrus.TextFormatter)
+
+	// Set the desired timestamp format and log level
+	if Verbose {
+		Formatter.TimestampFormat = time.RFC3339Nano
+		logrus.SetLevel(logrus.DebugLevel)
+	} else {
+		Formatter.TimestampFormat = time.RFC822
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
+	Formatter.FullTimestamp = true
+
+	logrus.SetFormatter(Formatter)
+
+	return nil
 }
