@@ -9,7 +9,7 @@ type SystemPartitions struct {
 	WholeDisks            []string   `plist:"WholeDisks"`
 }
 
-// APFSPhysicalStore represents the physical device usually relating to synthesized virtual devices.
+// APFSPhysicalStoreID represents the physical device usually relating to synthesized virtual devices.
 type APFSPhysicalStoreID struct {
 	DeviceIdentifier string `plist:"DeviceIdentifier"`
 }

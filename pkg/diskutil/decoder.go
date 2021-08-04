@@ -7,19 +7,18 @@ import (
 	"howett.net/plist"
 )
 
-// PlistDecoder outlines the functionality necessary for decoding plist output from the macOS diskutil command.
-type PlistDecoder interface {
-	DecodeList(rawDiskList string) (partitions *SystemPartitions, err error)
-	DecodeDisk(rawDisk string) (diskInfo *DiskInfo, err error)
-	DecodeContainer(rawContainer string) (containerInfo *ContainerInfo, err error)
+// Decoder outlines the functionality necessary for decoding plist output from the macOS diskutil command.
+type Decoder interface {
+	DecodeList(rawDiskList string) (*SystemPartitions, error)
+	DecodeInfo(rawDisk string) (*DiskInfo, error)
 }
 
-// Decoder is an empty struct that provides the implementation for the PlistDecoder interface.
-type Decoder struct{}
+// PlistDecoder is an empty struct that provides the implementation for the Decoder interface.
+type PlistDecoder struct{}
 
 // DecodeList takes a string containing the raw plist data for all disks and partition information
 // and decodes it into a new SystemPartitions struct.
-func (d *Decoder) DecodeList(rawList string) (partitions *SystemPartitions, err error) {
+func (d *PlistDecoder) DecodeList(rawList string) (partitions *SystemPartitions, err error) {
 	// Catch panics thrown by the Decode method
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
@@ -28,7 +27,7 @@ func (d *Decoder) DecodeList(rawList string) (partitions *SystemPartitions, err 
 		}
 	}()
 
-	// Create a reader from the raw data and create a new Decoder
+	// Create a reader from the raw data and create a new plist Decoder
 	partitions = &SystemPartitions{}
 	outputReader := bytes.NewReader([]byte(rawList))
 	decoder := plist.NewDecoder(outputReader)
@@ -42,9 +41,9 @@ func (d *Decoder) DecodeList(rawList string) (partitions *SystemPartitions, err 
 	return partitions, nil
 }
 
-// DecodeDisk takes a string containing the raw plist data for disk information and decodes it into
+// DecodeInfo takes a string containing the raw plist data for disk information and decodes it into
 // a new DiskInfo struct.
-func (d *Decoder) DecodeDisk(rawDisk string) (disk *DiskInfo, err error) {
+func (d *PlistDecoder) DecodeInfo(rawDisk string) (disk *DiskInfo, err error) {
 	// Catch panics thrown by the Decode method
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
@@ -53,7 +52,7 @@ func (d *Decoder) DecodeDisk(rawDisk string) (disk *DiskInfo, err error) {
 		}
 	}()
 
-	// Create a reader from the raw data and create a new Decoder
+	// Create a reader from the raw data and create a new PlistDecoder
 	disk = &DiskInfo{}
 	outputReader := bytes.NewReader([]byte(rawDisk))
 	decoder := plist.NewDecoder(outputReader)
@@ -65,29 +64,4 @@ func (d *Decoder) DecodeDisk(rawDisk string) (disk *DiskInfo, err error) {
 	}
 
 	return disk, nil
-}
-
-// DecodeContainer takes a string containing the raw plist data for container/file system information
-// and decodes it into a new ContainerInfo struct.
-func (d *Decoder) DecodeContainer(rawContainer string) (container *ContainerInfo, err error) {
-	// Catch panics thrown by the Decode method
-	defer func() {
-		if panicErr := recover(); panicErr != nil {
-			container = nil
-			err = fmt.Errorf("diskutil: panic occured while decoding: %s", panicErr)
-		}
-	}()
-
-	// Create a reader from the raw data and create a new Decoder
-	container = &ContainerInfo{}
-	outputReader := bytes.NewReader([]byte(rawContainer))
-	decoder := plist.NewDecoder(outputReader)
-
-	// Decode the plist output from diskutil into a DiskInfo struct for easier access
-	err = decoder.Decode(container)
-	if err != nil {
-		return nil, fmt.Errorf("diskutil: failed to decode diskutil container info output: %v", err)
-	}
-
-	return container, err
 }

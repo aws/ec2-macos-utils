@@ -1,3 +1,4 @@
+// Package cmd provides the functionality necessary for CLI commands in EC2 macOS Utils.
 package cmd
 
 import (
@@ -5,11 +6,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/ec2-macos-utils/pkg/system"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 const (
+	// gitHubLink is the static HTTPS URL for EC2 macOS Utils public GitHub repository.
 	gitHubLink = "https://github.com/aws/ec2-macos-utils"
 )
 
@@ -19,6 +22,9 @@ var (
 
 	// Version is the latest version of the utility. This variable gets set at build-time.
 	Version string
+
+	// Product is the type used to define what product version EC2 macOS Utils is running on.
+	Product system.Product
 
 	// Verbose is a persistent flag that determines the level of output to be logged.
 	Verbose bool
@@ -63,7 +69,33 @@ func init() {
 // configureUtils configures everything necessary before ec2-macos-utils runs.
 func configureUtils(cmd *cobra.Command, args []string) error {
 	// Configure the logger
-	err := setupLogger()
+	setupLogger()
+
+	logrus.Debug("Configuring EC2 macOS Utils...")
+
+	logrus.Debug("Configuring the product version...")
+	// Set the running product version
+	err := setupProductVersion()
+	if err != nil {
+		return err
+	}
+	logrus.WithField("product", Product).Debug("Configured the product version")
+
+	logrus.Debug("Completed configuring EC2 macOS Utils")
+
+	return nil
+}
+
+// setupProductVersion configures the package global variable ProductVersion.
+func setupProductVersion() error {
+	// Get the system version information
+	version, err := system.ReadVersion()
+	if err != nil {
+		return err
+	}
+
+	// Determine the correct baseProduct from the version information
+	Product, err = version.Product()
 	if err != nil {
 		return err
 	}
@@ -72,7 +104,7 @@ func configureUtils(cmd *cobra.Command, args []string) error {
 }
 
 // setupLogger configures logrus to use the desired timestamp format and log level.
-func setupLogger() error {
+func setupLogger() {
 	Formatter := new(logrus.TextFormatter)
 
 	// Set the desired timestamp format and log level
@@ -87,6 +119,4 @@ func setupLogger() error {
 	Formatter.FullTimestamp = true
 
 	logrus.SetFormatter(Formatter)
-
-	return nil
 }

@@ -1,24 +1,22 @@
 package diskutil
 
-//go:generate mockgen -destination=mocks/mock_wrapper.go github.com/aws/ec2-macos-utils/pkg/diskutil DiskUtility
-
 import (
 	"fmt"
 
 	"github.com/aws/ec2-macos-utils/pkg/util"
 )
 
-// DiskUtility outlines the functionality necessary for wrapping macOS's diskutil tool.
-type DiskUtility interface {
-	List(args []string) (out string, err error)
-	Info(id string) (out string, err error)
-	RepairDisk(id string) (out string, err error)
-	APFS
+// UtilImpl outlines the functionality necessary for wrapping macOS's diskutil tool.
+type UtilImpl interface {
+	List(args []string) (string, error)
+	Info(id string) (string, error)
+	RepairDisk(id string) (string, error)
+	APFSImpl
 }
 
-// APFS outlines the functionality necessary for wrapping diskutil's APFS verb.
-type APFS interface {
-	ResizeContainer(id, size string) (out string, err error)
+// APFSImpl outlines the functionality necessary for wrapping diskutil's APFS verb.
+type APFSImpl interface {
+	ResizeContainer(id, size string) (string, error)
 }
 
 // DiskUtilityCmd is an empty struct that provides the implementation for the DiskUtility interface.
@@ -26,7 +24,7 @@ type DiskUtilityCmd struct{}
 
 // List uses the macOS diskutil list command to list disks and partitions in a plist format by passing the -plist arg.
 // List also appends any given args to fully support the diskutil list verb.
-func (d *DiskUtilityCmd) List(args []string) (out string, err error) {
+func (d *DiskUtilityCmd) List(args []string) (string, error) {
 	// Create the diskutil command for retrieving all disk and partition information
 	//   * -plist converts diskutil's output from human-readable to the plist format
 	cmdListDisks := []string{"diskutil", "list", "-plist"}
@@ -47,7 +45,7 @@ func (d *DiskUtilityCmd) List(args []string) (out string, err error) {
 
 // Info uses the macOS diskutil info command to get detailed information about a disk, partition or container in a plist
 // format by passing the -plist arg.
-func (d *DiskUtilityCmd) Info(id string) (out string, err error) {
+func (d *DiskUtilityCmd) Info(id string) (string, error) {
 	// Create the diskutil command for retrieving disk information given a device identifier
 	//   * -plist converts diskutil's output from human-readable to the plist format
 	//   * id - the device identifier for the disk to be fetched
@@ -64,7 +62,7 @@ func (d *DiskUtilityCmd) Info(id string) (out string, err error) {
 
 // RepairDisk uses the macOS diskutil diskRepair command to repair the specified volume and get updated information
 // (e.g. amount of free space).
-func (d *DiskUtilityCmd) RepairDisk(id string) (out string, err error) {
+func (d *DiskUtilityCmd) RepairDisk(id string) (string, error) {
 	// cmdRepairDisk represents the command used for executing macOS's diskutil to repair a disk
 	// this is done by having zsh directly execute the diskutil command and provide "yes" to skip manual typing
 	//   * repairDisk - indicates that a disk is going to be repaired (used to fetch amount of free space)
@@ -81,7 +79,7 @@ func (d *DiskUtilityCmd) RepairDisk(id string) (out string, err error) {
 }
 
 // ResizeContainer uses the macOS diskutil apfs resizeContainer command to change the size of the specific container ID.
-func (d *DiskUtilityCmd) ResizeContainer(id, size string) (out string, err error) {
+func (d *DiskUtilityCmd) ResizeContainer(id, size string) (string, error) {
 	// cmdResizeContainer represents the command used for executing macOS's diskutil to resize a container
 	//   * apfs - specifies that a virtual APFS volume is going to be modified
 	//   * resizeContainer - indicates that a container is going to be resized

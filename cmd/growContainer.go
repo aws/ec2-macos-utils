@@ -36,9 +36,10 @@ Note: If the EBS Volume size was changed and the instance hasn't
 been restarted yet, this command will fail to resize the container
 until the instance has been restarted.`,
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		utility := diskutil.DiskUtil{
-			Utility: &diskutil.DiskUtilityCmd{},
-			Decoder: &diskutil.Decoder{},
+		// Create a new DiskUtil that is compatible with the current underlying product version
+		utility, err := diskutil.NewDiskUtil(Product)
+		if err != nil {
+			return fmt.Errorf("error creating new DiskUtil for ProductVersion [%v]: %w", Product, err)
 		}
 
 		return run(utility, ContainerID)
@@ -89,48 +90,46 @@ func run(utility diskutil.DiskUtil, id string) (err error) {
 	logrus.WithField("partitions", partitions).Debug("Found partition information")
 
 	// Setup the disk pointer to be initialized based on the contents of id
-	var disk *diskutil.DiskInfo
+	var container *diskutil.DiskInfo
 
 	// Check if the id flag is "root", an identifier (e.g. disk1), or node (e.g. /dev/disk1)
 	logrus.WithField("id", id).Debug("Checking if device ID is \"root\"")
 	if strings.EqualFold(id, "root") {
 		logrus.Info("Searching for root container to resize...")
-		rootContainer, err := rootContainer(utility)
+		container, err = rootContainer(utility)
 		if err != nil {
 			return err
 		}
-		logrus.WithField("rootContainer", rootContainer).Debug("Found root information")
-
-		disk = &rootContainer.DiskInfo
-		logrus.WithField("disk", disk).Debug("Set disk information")
+		logrus.WithField("container", container).Debug("Found container information")
 	} else {
 		// Check that the given container ID is valid
 		logrus.WithField("id", id).Info("Validating container ID...")
 		valid, err := validateDeviceID(id, partitions)
 		if err != nil {
-			logrus.WithError(err).WithField("id", id).Fatal("Error validating container ID")
+			return err
 		}
 		if !valid {
-			logrus.WithField("id", id).Fatal("Container ID is not a valid device ID")
+			logrus.WithField("id", id).Warn("Container ID is not a valid device ID")
+			return fmt.Errorf("error container ID [%s] is not valid", id)
 		}
 		logrus.WithField("id", id).Info("Container ID is valid")
 
 		// Get the disk information for the container
 		logrus.Info("Fetching disk information...")
-		disk, err = utility.InfoDisk(id)
+		container, err = utility.Info(id)
 		if err != nil {
-			logrus.WithError(err).Fatal("Error fetching disk information")
+			return err
 		}
-		logrus.WithField("disk", disk).Debug("Found disk information")
+		logrus.WithField("container", container).Debug("Found container information")
 	}
 	logrus.WithFields(logrus.Fields{
-		"id":   disk.DeviceIdentifier,
-		"size": humanize.Bytes(disk.Size),
+		"id":   container.DeviceIdentifier,
+		"size": humanize.Bytes(container.Size),
 	}).Info("Successfully loaded disk information")
 
 	// Attempt to resize the container
 	logrus.Info("Attempting to grow container...")
-	message, err := growContainer(disk, partitions, utility)
+	message, err := growContainer(container, partitions, utility)
 	if err != nil {
 		// Check if the error is a MinimumGrowSpaceError and return without an error if it is
 		if _, ok := err.(MinimumGrowSpaceError); ok {
@@ -138,7 +137,8 @@ func run(utility diskutil.DiskUtil, id string) (err error) {
 			return nil
 		}
 
-		logrus.WithError(err).Fatalf("Error growing the container, message: %s", message)
+		logrus.WithField("message", message).Warn("Error growing the container", message)
+		return fmt.Errorf("error growing the container: %w", err)
 	}
 	logrus.Infof("Successfully completed with message: %s", message)
 
@@ -147,16 +147,15 @@ func run(utility diskutil.DiskUtil, id string) (err error) {
 
 // growContainer grows a container to its maximum size given an ID.
 func growContainer(disk *diskutil.DiskInfo, partitions *diskutil.SystemPartitions, utility diskutil.DiskUtil) (message string, err error) {
-	// Check if there disk has a physical store that should be repaired before resizing
-	logrus.Info("Checking for a physical store...")
-	if disk.APFSPhysicalStores != nil {
-		logrus.WithField("physical_stores", disk.APFSPhysicalStores).Info("Found physical store(s)")
-
-		logrus.Info("Attempting to repair the parent disk...")
-		message, err := repairParentDisk(disk, partitions, utility)
-		if err != nil {
+	// Attempt to repair the parent disk in order to get updated amount of free space
+	logrus.Info("Attempting to repair the parent disk...")
+	message, err = repairParentDisk(disk, partitions, utility)
+	if err != nil {
+		if _, ok := err.(MinimumGrowSpaceError); ok {
 			return message, err
 		}
+
+		logrus.WithError(err).Warn("Failed to repair the parent disk, attempting to continue anyways...")
 	} else {
 		logrus.WithField("disk_id", disk.DeviceIdentifier).Info("No Physical Stores found for disk, attempting to repair...")
 	}
@@ -172,7 +171,7 @@ func growContainer(disk *diskutil.DiskInfo, partitions *diskutil.SystemPartition
 
 	// Get updated container size
 	logrus.Info("Fetching updated disk information...")
-	updatedDisk, err := utility.InfoDisk(disk.DeviceIdentifier)
+	updatedDisk, err := utility.Info(disk.DeviceIdentifier)
 	if err != nil {
 		return fmt.Sprintf("failed to fetch updated disk information for container [%s]", disk.DeviceIdentifier), err
 	}
@@ -283,18 +282,25 @@ func availableDiskSpace(id string, partitions *diskutil.SystemPartitions) (size 
 }
 
 // rootContainer determines the ID for the container which is mounted as root.
-func rootContainer(utility diskutil.DiskUtil) (container *diskutil.ContainerInfo, err error) {
+func rootContainer(utility diskutil.DiskUtil) (container *diskutil.DiskInfo, err error) {
 	// Get the disk information for the root file system
-	container, err = utility.InfoContainer("/")
+	container, err = utility.Info("/")
 	if err != nil {
 		return nil, err
 	}
 
-	// Replace the DiskInfo DeviceIdentifier with the ContainerInfo APFSContainerReference.
-	// This is necessary since the growContainer() function utilizes the DeviceIdentifier field.
-	// The function expects a DeviceIdentifier matching the format "disk2" but the DeviceIdentifier
-	// returned from the call getDiskInformation("/") looks like "disk2s4s1" which will cause growContainer() to fail.
-	container.DiskInfo.DeviceIdentifier = container.APFSContainerReference
+	// Replace the root disk's DeviceIdentifier with the identifier for the container reference.
+	// This is necessary since the growContainer() function utilizes the DeviceIdentifier field and expects
+	// a container reference. The function expects a DeviceIdentifier matching the format "disk2" but the
+	// DeviceIdentifier returned from the call getDiskInformation("/") looks like "disk2s4s1" which will cause
+	// growContainer() to fail.
+	if container.APFSContainerReference != "" {
+		container.DeviceIdentifier = container.APFSContainerReference
+	} else {
+		diskIDRegex := regexp.MustCompile("disk[0-9]+")
+		id := diskIDRegex.FindString(container.DeviceIdentifier)
+		container.DeviceIdentifier = id
+	}
 
 	return container, nil
 }
@@ -308,15 +314,19 @@ func parentDeviceID(disk *diskutil.DiskInfo) (id string, err error) {
 	}
 
 	// Check if there's more than one Physical Store in the disk's info. Having more than one APFS Physical Store
-	// is unexpected and the common case shouldn't violate this
-	if len(disk.APFSPhysicalStores) > 1 {
+	// is unexpected and the common case shouldn't violate this.
+	//
+	// Note: more than one physical store can indicate a fusion drive - https://support.apple.com/en-us/HT202574.
+	if len(disk.APFSPhysicalStores) == 1 {
+		id = disk.APFSPhysicalStores[0].DeviceIdentifier
+	} else {
 		return "", fmt.Errorf("expected 1 physical store but got [%d]", len(disk.APFSPhysicalStores))
 	}
 
 	// Match the disk ID from the Physical Store's device identifier and remove extra partition information
 	// from it (e.g. "s4s1")
 	diskIDRegex := regexp.MustCompile("disk[0-9]+")
-	id = diskIDRegex.FindString(disk.APFSPhysicalStores[0].DeviceIdentifier)
+	id = diskIDRegex.FindString(id)
 	if id == "" {
 		return "", fmt.Errorf("physical store [%s] does not contain the expected expression \"disk[0-9]+\"", disk.APFSPhysicalStores[0].DeviceIdentifier)
 	}

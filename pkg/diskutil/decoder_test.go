@@ -14,13 +14,13 @@ var (
 	containerTests = []struct {
 		name          string
 		args          args
-		wantContainer *ContainerInfo
+		wantContainer *DiskInfo
 		wantErr       bool
 	}{
 		{
 			name:          "Bad case: empty input",
 			args:          args{input: ""},
-			wantContainer: &ContainerInfo{},
+			wantContainer: &DiskInfo{},
 			wantErr:       false,
 		},
 		{
@@ -78,20 +78,20 @@ var (
 					"</dict>\n" +
 					"</plist>",
 			},
-			wantContainer: &ContainerInfo{
-				DiskInfo: DiskInfo{
-					AESHardware:            false,
-					APFSContainerReference: "disk2",
-					APFSPhysicalStores:     []APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
+			wantContainer: &DiskInfo{
+				ContainerInfo: ContainerInfo{
+					APFSContainerFree: 41477054464,
+					APFSContainerSize: 64214753280,
 				},
-				APFSContainerFree: 41477054464,
-				APFSContainerSize: 64214753280,
+				AESHardware:            false,
+				APFSContainerReference: "disk2",
+				APFSPhysicalStores:     []APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
 			},
 			wantErr: false,
 		},
 	}
 
-	// diskTests is the test data used in the test functions TestDecodeDisk and TestDecoder_DecodeDisk.
+	// diskTests is the test data used in the test functions TestDecodeDisk and TestDecoder_DecodeInfo.
 	diskTests = []struct {
 		name     string
 		args     args
@@ -342,33 +342,17 @@ var (
 	}
 )
 
-func TestDecoder_DecodeContainer(t *testing.T) {
-	for _, tt := range containerTests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &Decoder{}
-			gotContainer, err := p.DecodeContainer(tt.args.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeContainer() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotContainer, tt.wantContainer) {
-				t.Errorf("DecodeContainer() gotContainer = %#v, want %#v", gotContainer, tt.wantContainer)
-			}
-		})
-	}
-}
-
-func TestDecoder_DecodeDisk(t *testing.T) {
+func TestDecoder_DecodeInfo(t *testing.T) {
 	for _, tt := range diskTests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &Decoder{}
-			gotDisk, err := p.DecodeDisk(tt.args.input)
+			p := &PlistDecoder{}
+			gotDisk, err := p.DecodeInfo(tt.args.input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeDisk() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DecodeInfo() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(gotDisk, tt.wantDisk) {
-				t.Errorf("DecodeDisk() gotDisk = %#v, want %#v", gotDisk, tt.wantDisk)
+				t.Errorf("DecodeInfo() gotDisk = %#v, want %#v", gotDisk, tt.wantDisk)
 			}
 		})
 	}
@@ -377,7 +361,7 @@ func TestDecoder_DecodeDisk(t *testing.T) {
 func TestDecoder_DecodeList(t *testing.T) {
 	for _, tt := range listTests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &Decoder{}
+			p := &PlistDecoder{}
 			gotPartitions, err := p.DecodeList(tt.args.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DecodeList() error = %v, wantErr %v", err, tt.wantErr)

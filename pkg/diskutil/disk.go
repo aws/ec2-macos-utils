@@ -2,6 +2,7 @@ package diskutil
 
 // DiskInfo mirrors the output format of the command "diskutil info -plist <disk>" to store information about a disk.
 type DiskInfo struct {
+	ContainerInfo
 	AESHardware                                 bool                `plist:"AESHardware"`
 	APFSContainerReference                      string              `plist:"APFSContainerReference"`
 	APFSPhysicalStores                          []APFSPhysicalStore `plist:"APFSPhysicalStores"`
@@ -53,7 +54,6 @@ type DiskInfo struct {
 
 // ContainerInfo expands on DiskInfo to add extra information for APFS Containers.
 type ContainerInfo struct {
-	DiskInfo
 	APFSContainerFree               uint64 `plist:"APFSContainerFree"`
 	APFSContainerSize               uint64 `plist:"APFSContainerSize"`
 	APFSSnapshot                    bool   `plist:"APFSSnapshot"`
