@@ -67,10 +67,10 @@ func (d *DiskUtilityCmd) RepairDisk(id string) (string, error) {
 	// this is done by having zsh directly execute the diskutil command and provide "yes" to skip manual typing
 	//   * repairDisk - indicates that a disk is going to be repaired (used to fetch amount of free space)
 	//   * id - the device identifier for the disk to be repaired
-	cmdRepairDisk := []string{"/bin/zsh", "-c", "yes | diskutil repairDisk " + id}
+	cmdRepairDisk := []string{"diskutil", "repairDisk", id}
 
 	// Execute the diskutil repairDisk command and store the output
-	cmdOut, err := util.ExecuteCommand(cmdRepairDisk, "", []string{})
+	cmdOut, err := util.ExecuteCommandYes(cmdRepairDisk, "", []string{})
 	if err != nil {
 		return cmdOut.Stdout, fmt.Errorf("diskutil: failed to run diskutil command to repair the disk, stderr: [%s]: %v", cmdOut.Stderr, err)
 	}

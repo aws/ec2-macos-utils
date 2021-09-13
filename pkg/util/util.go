@@ -65,6 +65,79 @@ func ExecuteCommand(c []string, runAsUser string, envVars []string) (output Comm
 	return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, err
 }
 
+// ExecuteCommandYes wraps ExecuteCommand with the yes binary in order to bypass user input states in automation.
+func ExecuteCommandYes(c []string, runAsUser string, envVars []string) (output CommandOutput, err error) {
+	// Separate name and args, plus catch a few error cases
+	var name string
+	var args []string
+
+	// Check the empty struct case ([]string{}) for the command
+	if len(c) == 0 {
+		return CommandOutput{}, fmt.Errorf("ec2macosutils: must provide a command")
+	}
+
+	// Check the empty string case ("") for the first string in the command
+	if c[0] == "" {
+		return CommandOutput{}, fmt.Errorf("ec2macosutils: must provide a command")
+	}
+
+	// Set the name of the command and check if args are also provided
+	name = c[0]
+	if len(c) > 1 {
+		args = c[1:]
+	}
+
+	// Set exec commands, one for yes and another for the specified command
+	cmdYes := exec.Command("/usr/bin/yes")
+	cmd := exec.Command(name, args...)
+
+	// Pipe cmdYes into cmd
+	if cmd.Stdin, err = cmdYes.StdoutPipe(); err != nil {
+		return CommandOutput{}, fmt.Errorf("ec2macosutils: error creating pipe between commands")
+	}
+
+	// Set the output buffers
+	var stdoutb, stderrb bytes.Buffer
+	cmd.Stdout = &stdoutb
+	cmd.Stderr = &stderrb
+
+	// Set runAsUser, if defined, otherwise will run as root
+	if runAsUser != "" {
+		uid, gid, err := getUIDandGID(runAsUser)
+		if err != nil {
+			return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("ec2macosutils: error looking up user: %w", err)
+		}
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+	}
+
+	// Append environment variables
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, envVars...)
+
+	// Start the command to run /usr/bin/yes
+	if err = cmdYes.Start(); err != nil {
+		return CommandOutput{}, fmt.Errorf("ec2macosutils: error starting /usr/bin/yes command: %w", err)
+	}
+
+	// Start the command to run the command given in c
+	if err = cmd.Start(); err != nil {
+		return CommandOutput{}, fmt.Errorf("ec2macosutils: error starting specified command: %w", err)
+	}
+
+	// Wait for the command given in c to exit
+	if err = cmd.Wait(); err != nil {
+		return CommandOutput{}, fmt.Errorf("ec2macosutils: error waiting for specified command to exit: %w", err)
+	}
+
+	// Wait for the yes command to exit
+	if err = cmdYes.Wait(); err != nil {
+		return CommandOutput{}, fmt.Errorf("ec2macosutils: error waiting for /usr/bin/yes to exit: %w", err)
+	}
+
+	return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, err
+}
+
 // getUIDandGID takes a username and returns the uid and gid for that user.
 // While testing UID/GID lookup for a user, it was found that the user.Lookup() function does not always return
 // information for a new user on first boot. In the case that user.Lookup() fails, we try dscacheutil, which has a

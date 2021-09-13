@@ -156,8 +156,6 @@ func growContainer(disk *diskutil.DiskInfo, partitions *diskutil.SystemPartition
 		}
 
 		logrus.WithError(err).Warn("Failed to repair the parent disk, attempting to continue anyways...")
-	} else {
-		logrus.WithField("disk_id", disk.DeviceIdentifier).Info("No Physical Stores found for disk, attempting to repair...")
 	}
 
 	// Attempt to resize the container to its maximum size
