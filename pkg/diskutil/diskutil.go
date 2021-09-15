@@ -6,6 +6,7 @@ package diskutil
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/aws/ec2-macos-utils/pkg/system"
 	"github.com/aws/ec2-macos-utils/pkg/util"
@@ -56,7 +57,7 @@ type DiskUtility struct {
 	Decoder Decoder
 }
 
-// List utilizes the DiskUtil.List method to fetch the raw list output from diskutil and returns the decoded
+// List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
 func (d *DiskUtility) List(args []string) (*SystemPartitions, error) {
 	rawPartitions, err := d.Util.List(args)
@@ -64,7 +65,9 @@ func (d *DiskUtility) List(args []string) (*SystemPartitions, error) {
 		return nil, err
 	}
 
-	partitions, err := d.Decoder.DecodeList(rawPartitions)
+	reader := strings.NewReader(rawPartitions)
+
+	partitions, err := d.Decoder.DecodeList(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +75,7 @@ func (d *DiskUtility) List(args []string) (*SystemPartitions, error) {
 	return partitions, nil
 }
 
-// Info utilizes the DiskUtil.Info method to fetch the raw disk output from diskutil and returns the decoded
+// Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
 func (d *DiskUtility) Info(id string) (*DiskInfo, error) {
 	rawDisk, err := d.Util.Info(id)
@@ -80,7 +83,9 @@ func (d *DiskUtility) Info(id string) (*DiskInfo, error) {
 		return nil, err
 	}
 
-	disk, err := d.Decoder.DecodeInfo(rawDisk)
+	reader := strings.NewReader(rawDisk)
+
+	disk, err := d.Decoder.DecodeInfo(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +93,7 @@ func (d *DiskUtility) Info(id string) (*DiskInfo, error) {
 	return disk, nil
 }
 
-// RepairDisk wraps DiskUtil.RepairDisk.
+// RepairDisk wraps UtilImpl.RepairDisk.
 func (d *DiskUtility) RepairDisk(id string) (out string, err error) {
 	return d.Util.RepairDisk(id)
 }
@@ -98,13 +103,15 @@ func (d *DiskUtility) ResizeContainer(id, size string) (out string, err error) {
 	return d.Util.ResizeContainer(id, size)
 }
 
-// DiskUtilityMojave wraps all of the functionality necessary for interacting with macOS's diskutil on Mojave.
+// DiskUtilityMojave wraps all of the functionality necessary for interacting with macOS's diskutil on Mojave. The
+// major difference is that the raw plist data emitted by macOS's diskutil CLI doesn't include the physical store data.
+// This requires a separate fetch to find the specific physical store information for the disk(s).
 type DiskUtilityMojave struct {
 	Util    UtilImpl
 	Decoder Decoder
 }
 
-// List utilizes the DiskUtil.List method to fetch the raw list output from diskutil and returns the decoded
+// List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct. List also attempts to update each APFS Volume's physical store via a separate
 // fetch method since the version of diskutil on Mojave doesn't provide that information in its List verb.
 //
@@ -116,7 +123,9 @@ func (d *DiskUtilityMojave) List(args []string) (*SystemPartitions, error) {
 		return nil, err
 	}
 
-	partitions, err := d.Decoder.DecodeList(rawPartitions)
+	reader := strings.NewReader(rawPartitions)
+
+	partitions, err := d.Decoder.DecodeList(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +193,7 @@ func parsePhysicalStoreId(raw string) (string, error) {
 	return diskId, nil
 }
 
-// Info utilizes the DiskUtil.Info method to fetch the raw disk output from diskutil and returns the decoded
+// Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct. Info also attempts to update each APFS Volume's physical store via a separate
 // fetch method since the version of diskutil on Mojave doesn't provide that information in its Info verb.
 //
@@ -196,7 +205,9 @@ func (d *DiskUtilityMojave) Info(id string) (*DiskInfo, error) {
 		return nil, err
 	}
 
-	disk, err := d.Decoder.DecodeInfo(rawDisk)
+	reader := strings.NewReader(rawDisk)
+
+	disk, err := d.Decoder.DecodeInfo(reader)
 	if err != nil {
 		return nil, err
 	}

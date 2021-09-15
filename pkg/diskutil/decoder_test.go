@@ -1,8 +1,11 @@
 package diskutil
 
 import (
+	"bytes"
 	"embed"
+	"io"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -88,16 +91,16 @@ func TestPlistDecoder_DecodeInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d := &PlistDecoder{}
 
-			var input string
+			var input io.ReadSeeker
 
 			// Check to use test's args or read embedded data
 			if tt.useArgs {
-				input = tt.args.rawDisk
+				input = strings.NewReader(tt.args.rawDisk)
 			} else {
 				read, err := testDataFS.ReadFile(tt.testFileName)
 				assert.Nil(t, err)
 
-				input = string(read)
+				input = bytes.NewReader(read)
 			}
 
 			gotDisk, err := d.DecodeInfo(input)
@@ -172,16 +175,16 @@ func TestPlistDecoder_DecodeList(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d := &PlistDecoder{}
 
-			var input string
+			var input io.ReadSeeker
 
 			// Check to use test's args or read embedded data
 			if tt.useArgs {
-				input = tt.args.rawList
+				input = strings.NewReader(tt.args.rawList)
 			} else {
 				read, err := testDataFS.ReadFile(tt.testFileName)
 				assert.Nil(t, err)
 
-				input = string(read)
+				input = bytes.NewReader(read)
 			}
 
 			gotPartitions, err := d.DecodeList(input)
