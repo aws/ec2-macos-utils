@@ -1,84 +1,78 @@
 package diskutil
 
 import (
-	"reflect"
+	"embed"
+	"path"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-type args struct {
-	input string
-}
+//go:embed testdata/decoder
+var testDataFS embed.FS
 
-var (
-	// containerTests is the test data used in the test functions TestDecodeContainer and TestDecoder_DecodeContainer.
-	containerTests = []struct {
-		name          string
-		args          args
-		wantContainer *DiskInfo
-		wantErr       bool
+const testDataDir = "testdata/decoder"
+
+func TestPlistDecoder_DecodeInfo(t *testing.T) {
+	// testPrefix is the prefix used to load test data files from testDataFS
+	testPrefix := path.Join(testDataDir, "TestPlistDecoder_DecodeInfo-")
+
+	type args struct {
+		rawDisk string
+	}
+	tests := []struct {
+		name         string
+		args         args
+		useArgs      bool
+		testFileName string
+		wantDisk     *DiskInfo
+		wantErr      bool
 	}{
 		{
-			name:          "Bad case: empty input",
-			args:          args{input: ""},
-			wantContainer: &DiskInfo{},
-			wantErr:       false,
+			name:     "Good case: empty input",
+			args:     args{rawDisk: ""},
+			useArgs:  true,
+			wantDisk: &DiskInfo{},
+			wantErr:  false,
 		},
 		{
-			name:          "Bad case: garbage input",
-			args:          args{input: "abcdefghijklmnopqrstuvwxyz"},
-			wantContainer: nil,
-			wantErr:       true,
+			name:     "Bad case: garbage input",
+			args:     args{rawDisk: "abcdefghijklmnopqrstuvwxyz"},
+			useArgs:  true,
+			wantDisk: nil,
+			wantErr:  true,
 		},
 		{
-			name: "Bad case: improperly formatted input (missing header)",
-			args: args{
-				input: "\t<key>AESHardware</key>\n" +
-					"\t<false/>\n" +
-					"\t<key>APFSContainerFree</key>\n" +
-					"\t<integer>41477054464</integer>\n" +
-					"\t<key>APFSContainerReference</key>\n" +
-					"\t<string>disk2</string>\n" +
-					"\t<key>APFSContainerSize</key>\n" +
-					"\t<integer>64214753280</integer>\n" +
-					"\t<key>APFSPhysicalStores</key>\n" +
-					"\t<array>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>APFSPhysicalStore</key>\n" +
-					"\t\t\t<string>disk0s2</string>\n" +
-					"\t\t</dict>\n" +
-					"\t</array>\n" +
-					"</dict>\n" +
-					"</plist>",
+			name:         "Bad case: improperly formatted disk input (missing header)",
+			useArgs:      false,
+			testFileName: testPrefix + "bad-Info.txt",
+			wantDisk:     nil,
+			wantErr:      true,
+		},
+		{
+			name:         "Good case: properly formatted (sparse) disk input",
+			useArgs:      false,
+			testFileName: testPrefix + "good-Info.txt",
+			wantDisk: &DiskInfo{
+				AESHardware:            false,
+				APFSContainerReference: "disk2",
+				APFSPhysicalStores:     []APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
+				SMARTDeviceSpecificKeysMayVaryNotGuaranteed: &SmartDeviceInfo{AvailableSpare: 100},
 			},
-			wantContainer: nil,
-			wantErr:       true,
+			wantErr: false,
 		},
 		{
-			name: "Good case: properly formatted (sparse) input",
-			args: args{
-				input: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-					"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
-					"<plist version=\"1.0\">\n" +
-					"<dict>\n" +
-					"\t<key>AESHardware</key>\n" +
-					"\t<false/>\n" +
-					"\t<key>APFSContainerFree</key>\n" +
-					"\t<integer>41477054464</integer>\n" +
-					"\t<key>APFSContainerReference</key>\n" +
-					"\t<string>disk2</string>\n" +
-					"\t<key>APFSContainerSize</key>\n" +
-					"\t<integer>64214753280</integer>\n" +
-					"\t<key>APFSPhysicalStores</key>\n" +
-					"\t<array>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>APFSPhysicalStore</key>\n" +
-					"\t\t\t<string>disk0s2</string>\n" +
-					"\t\t</dict>\n" +
-					"\t</array>\n" +
-					"</dict>\n" +
-					"</plist>",
-			},
-			wantContainer: &DiskInfo{
+			name:         "Bad case: improperly formatted container input (missing header)",
+			useArgs:      false,
+			testFileName: testPrefix + "bad-Container.txt",
+			wantDisk:     nil,
+			wantErr:      true,
+		},
+		{
+			name:         "Good case: properly formatted (sparse) container input",
+			useArgs:      false,
+			testFileName: testPrefix + "good-Container.txt",
+			wantDisk: &DiskInfo{
 				ContainerInfo: ContainerInfo{
 					APFSContainerFree: 41477054464,
 					APFSContainerSize: 64214753280,
@@ -90,245 +84,79 @@ var (
 			wantErr: false,
 		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &PlistDecoder{}
 
-	// diskTests is the test data used in the test functions TestDecodeDisk and TestDecoder_DecodeInfo.
-	diskTests = []struct {
-		name     string
-		args     args
-		wantDisk *DiskInfo
-		wantErr  bool
-	}{
-		{
-			name:     "Good case: empty input",
-			args:     args{input: ""},
-			wantDisk: &DiskInfo{},
-			wantErr:  false,
-		},
-		{
-			name:     "Bad case: garbage input",
-			args:     args{input: "abcdefghijklmnopqrstuvwxyz"},
-			wantDisk: nil,
-			wantErr:  true,
-		},
-		{
-			name: "Bad case: improperly formatted input (missing header)",
-			args: args{
-				input: "\t<key>AESHardware</key>\n" +
-					"\t<false/>\n" +
-					"\t<key>APFSContainerReference</key>\n" +
-					"\t<string>disk2</string>\n" +
-					"\t<key>APFSPhysicalStores</key>\n" +
-					"\t<array>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>APFSPhysicalStore</key>\n" +
-					"\t\t\t<string>disk0s2\n" +
-					"\t\t</dict>\n" +
-					"\t</array>\n" +
-					"\t<key>SMARTDeviceSpecificKeysMayVaryNotGuaranteed</key>\n" +
-					"\t<dict>\n" +
-					"\t\t<key>AVAILABLE_SPARE</key>\n" +
-					"\t\t<integer>100</integer>\n" +
-					"\t</dict>\n" +
-					"</dict>\n" +
-					"</plist>",
-			},
-			wantDisk: nil,
-			wantErr:  true,
-		},
-		{
-			name: "Good case: properly formatted (sparse) input",
-			args: args{
-				input: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-					"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
-					"<plist version=\"1.0\">\n" +
-					"<dict>\n" +
-					"\t<key>AESHardware</key>\n" +
-					"\t<false/>\n" +
-					"\t<key>APFSContainerReference</key>\n" +
-					"\t<string>disk2</string>\n" +
-					"\t<key>APFSPhysicalStores</key>\n" +
-					"\t<array>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>APFSPhysicalStore</key>\n" +
-					"\t\t\t<string>disk0s2</string>\n" +
-					"\t\t</dict>\n" +
-					"\t</array>\n" +
-					"\t<key>SMARTDeviceSpecificKeysMayVaryNotGuaranteed</key>\n" +
-					"\t<dict>\n" +
-					"\t\t<key>AVAILABLE_SPARE</key>\n" +
-					"\t\t<integer>100</integer>\n" +
-					"\t</dict>\n" +
-					"</dict>\n" +
-					"</plist>",
-			},
-			wantDisk: &DiskInfo{
-				AESHardware:            false,
-				APFSContainerReference: "disk2",
-				APFSPhysicalStores:     []APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
-				SMARTDeviceSpecificKeysMayVaryNotGuaranteed: &SmartDeviceInfo{AvailableSpare: 100},
-			},
-			wantErr: false,
-		},
+			var input string
+
+			// Check to use test's args or read embedded data
+			if tt.useArgs {
+				input = tt.args.rawDisk
+			} else {
+				read, err := testDataFS.ReadFile(tt.testFileName)
+				assert.Nil(t, err)
+
+				input = string(read)
+			}
+
+			gotDisk, err := d.DecodeInfo(input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DecodeInfo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !assert.ObjectsAreEqualValues(gotDisk, tt.wantDisk) {
+				t.Errorf("DecodeInfo() gotDisk = %v, want %v", gotDisk, tt.wantDisk)
+			}
+		})
 	}
+}
 
-	// listTests is the test data used in the test functions TestDecodeList and TestDecoder_DecodeList.
-	listTests = []struct {
+func TestPlistDecoder_DecodeList(t *testing.T) {
+	// testPrefix is the prefix used to load test data files from testDataFS
+	testPrefix := path.Join(testDataDir, "TestPlistDecoder_DecodeList-")
+
+	type args struct {
+		rawList string
+	}
+	tests := []struct {
 		name           string
 		args           args
+		useArgs        bool
+		testFileName   string
 		wantPartitions *SystemPartitions
 		wantErr        bool
 	}{
 		{
-			name: "Bad case: improperly formatted input (missing header)",
-			args: args{
-				input: "\t<key>AllDisks</key>\n" +
-					"\t<array>\n" +
-					"\t\t<string>disk0</string>\n" +
-					"\t</array>\n" +
-					"\t<key>AllDisksAndPartitions</key>\n" +
-					"\t<array>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t<string>disk0</string>\n" +
-					"\t\t\t<key>Partitions</key>\n" +
-					"\t\t\t<array>\n" +
-					"\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t\t\t<string>disk0s1</string>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t\t\t<string>disk0s2</string>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t</array>\n" +
-					"\t\t\t<key>Size</key>\n" +
-					"\t\t\t<integer>121332826112</integer>\n" +
-					"\t\t</dict>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>APFSPhysicalStores</key>\n" +
-					"\t\t\t<array>\n" +
-					"\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t\t\t<string>disk0s2</string>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t</array>\n" +
-					"\t\t\t<key>APFSVolumes</key>\n" +
-					"\t\t\t<array>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t\t\t<string>disk2s4</string>\n" +
-					"\t\t\t\t\t<key>MountedSnapshots</key>\n" +
-					"\t\t\t\t\t<array>\n" +
-					"\t\t\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t\t\t<key>SnapshotUUID</key>\n" +
-					"\t\t\t\t\t\t\t<string>7CA60DB3-9063-4559-BC98-5BC05599DCF1</string>\n" +
-					"\t\t\t\t\t\t</dict>\n" +
-					"\t\t\t\t\t</array>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t</array>\n" +
-					"\t\t</dict>\n" +
-					"\t</array>\n" +
-					"\t<key>VolumesFromDisks</key>\n" +
-					"\t<array>\n" +
-					"\t\t<string>Macintosh HD - Data</string>\n" +
-					"\t</array>\n" +
-					"\t<key>WholeDisks</key>\n" +
-					"\t<array>\n" +
-					"\t\t<string>disk0</string>\n" +
-					"\t</array>\n" +
-					"</dict>\n" +
-					"</plist>",
-			},
+			name:           "Bad case: improperly formatted input (missing header)",
+			useArgs:        false,
+			testFileName:   testPrefix + "bad-List.txt",
 			wantPartitions: nil,
 			wantErr:        true,
 		},
 		{
-			name: "Good case: properly formatted (sparse) input",
-			args: args{
-				input: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-					"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
-					"<plist version=\"1.0\">\n" +
-					"<dict>\n" +
-					"\t<key>AllDisks</key>\n" +
-					"\t<array>\n" +
-					"\t\t<string>disk0</string>\n" +
-					"\t</array>\n" +
-					"\t<key>AllDisksAndPartitions</key>\n" +
-					"\t<array>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t<string>disk0</string>\n" +
-					"\t\t\t<key>Partitions</key>\n" +
-					"\t\t\t<array>\n" +
-					"\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t\t\t<string>disk0s1</string>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t</array>\n" +
-					"\t\t\t<key>Size</key>\n" +
-					"\t\t\t<integer>121332826112</integer>\n" +
-					"\t\t</dict>\n" +
-					"\t\t<dict>\n" +
-					"\t\t\t<key>APFSPhysicalStores</key>\n" +
-					"\t\t\t<array>\n" +
-					"\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t\t\t<string>disk0s2</string>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t</array>\n" +
-					"\t\t\t<key>APFSVolumes</key>\n" +
-					"\t\t\t<array>\n" +
-					"\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t<key>DeviceIdentifier</key>\n" +
-					"\t\t\t\t\t<string>disk2s4</string>\n" +
-					"\t\t\t\t\t<key>MountedSnapshots</key>\n" +
-					"\t\t\t\t\t<array>\n" +
-					"\t\t\t\t\t\t<dict>\n" +
-					"\t\t\t\t\t\t\t<key>SnapshotUUID</key>\n" +
-					"\t\t\t\t\t\t\t<string>7CA60DB3-9063-4559-BC98-5BC05599DCF1</string>\n" +
-					"\t\t\t\t\t\t</dict>\n" +
-					"\t\t\t\t\t</array>\n" +
-					"\t\t\t\t</dict>\n" +
-					"\t\t\t</array>\n" +
-					"\t\t</dict>\n" +
-					"\t</array>\n" +
-					"\t<key>VolumesFromDisks</key>\n" +
-					"\t<array>\n" +
-					"\t\t<string>Macintosh HD - Data</string>\n" +
-					"\t</array>\n" +
-					"\t<key>WholeDisks</key>\n" +
-					"\t<array>\n" +
-					"\t\t<string>disk0</string>\n" +
-					"\t</array>\n" +
-					"</dict>\n" +
-					"</plist>",
-			},
+			name:         "Good case: properly formatted (sparse) input",
+			useArgs:      false,
+			testFileName: testPrefix + "good-List.txt",
 			wantPartitions: &SystemPartitions{
 				AllDisks: []string{"disk0"},
 				AllDisksAndPartitions: []DiskPart{
 					{
 						DeviceIdentifier: "disk0",
 						Partitions: []Partition{
-							{
-								DeviceIdentifier: "disk0s1",
-							},
+							{DeviceIdentifier: "disk0s1"},
 						},
 						Size: 121332826112,
 					},
 					{
 						APFSPhysicalStores: []APFSPhysicalStoreID{
-							{
-								DeviceIdentifier: "disk0s2",
-							},
+							{DeviceIdentifier: "disk0s2"},
 						},
 						APFSVolumes: []APFSVolume{
 							{
 								DeviceIdentifier: "disk2s4",
 								MountedSnapshots: []Snapshot{
-									{
-										SnapshotUUID: "7CA60DB3-9063-4559-BC98-5BC05599DCF1",
-									},
+									{SnapshotUUID: "7CA60DB3-9063-4559-BC98-5BC05599DCF1"},
 								},
 							},
 						},
@@ -340,35 +168,29 @@ var (
 			wantErr: false,
 		},
 	}
-)
-
-func TestDecoder_DecodeInfo(t *testing.T) {
-	for _, tt := range diskTests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &PlistDecoder{}
-			gotDisk, err := p.DecodeInfo(tt.args.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeInfo() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotDisk, tt.wantDisk) {
-				t.Errorf("DecodeInfo() gotDisk = %#v, want %#v", gotDisk, tt.wantDisk)
-			}
-		})
-	}
-}
+			d := &PlistDecoder{}
 
-func TestDecoder_DecodeList(t *testing.T) {
-	for _, tt := range listTests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &PlistDecoder{}
-			gotPartitions, err := p.DecodeList(tt.args.input)
+			var input string
+
+			// Check to use test's args or read embedded data
+			if tt.useArgs {
+				input = tt.args.rawList
+			} else {
+				read, err := testDataFS.ReadFile(tt.testFileName)
+				assert.Nil(t, err)
+
+				input = string(read)
+			}
+
+			gotPartitions, err := d.DecodeList(input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DecodeList() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(gotPartitions, tt.wantPartitions) {
-				t.Errorf("DecodeList() gotPartitions = %#v, want %#v", gotPartitions, tt.wantPartitions)
+			if !assert.ObjectsAreEqualValues(gotPartitions, tt.wantPartitions) {
+				t.Errorf("DecodeList() gotPartitions = %v, want %v", gotPartitions, tt.wantPartitions)
 			}
 		})
 	}

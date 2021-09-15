@@ -1,0 +1,18 @@
+    <key>AESHardware</key>
+    <false/>
+    <key>APFSContainerReference</key>
+    <string>disk2</string>
+    <key>APFSPhysicalStores</key>
+    <array>
+        <dict>
+            <key>APFSPhysicalStore</key>
+            <string>disk0s2
+        </dict>
+    </array>
+    <key>SMARTDeviceSpecificKeysMayVaryNotGuaranteed</key>
+    <dict>
+        <key>AVAILABLE_SPARE</key>
+        <integer>100</integer>
+    </dict>
+</dict>
+</plist>

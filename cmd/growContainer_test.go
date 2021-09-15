@@ -15,7 +15,8 @@ import (
 
 //go:embed testdata/growContainer
 var testDataFS embed.FS
-var testDataDir = "testdata/growContainer"
+
+const testDataDir = "testdata/growContainer"
 
 func TestMinimumGrowSpaceError_Error(t *testing.T) {
 	type fields struct {

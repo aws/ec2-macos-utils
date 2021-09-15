@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>AESHardware</key>
+    <false/>
+    <key>APFSContainerReference</key>
+    <string>disk2</string>
+    <key>APFSPhysicalStores</key>
+    <array>
+        <dict>
+            <key>APFSPhysicalStore</key>
+            <string>disk0s2</string>
+        </dict>
+    </array>
+    <key>SMARTDeviceSpecificKeysMayVaryNotGuaranteed</key>
+    <dict>
+        <key>AVAILABLE_SPARE</key>
+        <integer>100</integer>
+    </dict>
+</dict>
+</plist>

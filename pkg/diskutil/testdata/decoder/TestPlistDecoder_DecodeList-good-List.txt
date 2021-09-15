@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>AllDisks</key>
+    <array>
+        <string>disk0</string>
+    </array>
+    <key>AllDisksAndPartitions</key>
+    <array>
+        <dict>
+            <key>DeviceIdentifier</key>
+            <string>disk0</string>
+            <key>Partitions</key>
+            <array>
+                <dict>
+                    <key>DeviceIdentifier</key>
+                    <string>disk0s1</string>
+                </dict>
+            </array>
+            <key>Size</key>
+            <integer>121332826112</integer>
+        </dict>
+        <dict>
+            <key>APFSPhysicalStores</key>
+            <array>
+                <dict>
+                    <key>DeviceIdentifier</key>
+                    <string>disk0s2</string>
+                </dict>
+            </array>
+            <key>APFSVolumes</key>
+            <array>
+                <dict>
+                    <key>DeviceIdentifier</key>
+                    <string>disk2s4</string>
+                    <key>MountedSnapshots</key>
+                    <array>
+                        <dict>
+                            <key>SnapshotUUID</key>
+                            <string>7CA60DB3-9063-4559-BC98-5BC05599DCF1</string>
+                        </dict>
+                    </array>
+                </dict>
+            </array>
+        </dict>
+    </array>
+    <key>VolumesFromDisks</key>
+    <array>
+        <string>Macintosh HD - Data</string>
+    </array>
+    <key>WholeDisks</key>
+    <array>
+        <string>disk0</string>
+    </array>
+</dict>
+</plist>
