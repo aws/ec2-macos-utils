@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"path"
@@ -245,7 +246,7 @@ func Test_growContainer(t *testing.T) {
 				assert.Nil(t, err)
 
 				decoder := &diskutil.PlistDecoder{}
-				info, err := decoder.DecodeInfo(string(rawInfoOutput))
+				info, err := decoder.DecodeInfo(bytes.NewReader(rawInfoOutput))
 				assert.Nil(t, err)
 
 				gomock.InOrder(
@@ -548,7 +549,7 @@ func Test_rootContainer(t *testing.T) {
 				assert.Nil(t, err)
 
 				decoder := &diskutil.PlistDecoder{}
-				info, err := decoder.DecodeInfo(string(rawInfoOutput))
+				info, err := decoder.DecodeInfo(bytes.NewReader(rawInfoOutput))
 				assert.Nil(t, err)
 
 				utility.EXPECT().Info(gomock.Eq("/")).Return(info, nil)
@@ -643,7 +644,7 @@ func Test_run(t *testing.T) {
 				assert.Nil(t, err)
 
 				decoder := &diskutil.PlistDecoder{}
-				list, err := decoder.DecodeList(string(rawListOutput))
+				list, err := decoder.DecodeList(bytes.NewReader(rawListOutput))
 				assert.Nil(t, err)
 
 				var args []string
@@ -661,7 +662,7 @@ func Test_run(t *testing.T) {
 				assert.Nil(t, err)
 
 				decoder := &diskutil.PlistDecoder{}
-				list, err := decoder.DecodeList(string(rawListOutput))
+				list, err := decoder.DecodeList(bytes.NewReader(rawListOutput))
 				assert.Nil(t, err)
 
 				var args []string
@@ -685,10 +686,10 @@ func Test_run(t *testing.T) {
 				assert.Nil(t, err)
 
 				decoder := &diskutil.PlistDecoder{}
-				list, err := decoder.DecodeList(string(rawListOutput))
+				list, err := decoder.DecodeList(bytes.NewReader(rawListOutput))
 				assert.Nil(t, err)
 
-				info, err := decoder.DecodeInfo(string(rawInfoOutput))
+				info, err := decoder.DecodeInfo(bytes.NewReader(rawInfoOutput))
 				assert.Nil(t, err)
 
 				var args []string
@@ -717,13 +718,13 @@ func Test_run(t *testing.T) {
 				assert.Nil(t, err)
 
 				decoder := &diskutil.PlistDecoder{}
-				list, err := decoder.DecodeList(string(rawListOutput))
+				list, err := decoder.DecodeList(bytes.NewReader(rawListOutput))
 				assert.Nil(t, err)
 
-				info, err := decoder.DecodeInfo(string(rawInfoOutput))
+				info, err := decoder.DecodeInfo(bytes.NewReader(rawInfoOutput))
 				assert.Nil(t, err)
 
-				updatedInfo, err := decoder.DecodeInfo(string(rawUpdatedInfoOutput))
+				updatedInfo, err := decoder.DecodeInfo(bytes.NewReader(rawUpdatedInfoOutput))
 				assert.Nil(t, err)
 
 				var args []string
