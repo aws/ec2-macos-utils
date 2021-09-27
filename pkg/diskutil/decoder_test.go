@@ -8,17 +8,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
+
 	"github.com/stretchr/testify/assert"
 )
 
 //go:embed testdata/decoder
-var testDataFS embed.FS
+var decoderDataFS embed.FS
 
-const testDataDir = "testdata/decoder"
+const decoderDataDir = "testdata/decoder"
 
 func TestPlistDecoder_DecodeInfo(t *testing.T) {
 	// testPrefix is the prefix used to load test data files from testDataFS
-	testPrefix := path.Join(testDataDir, "TestPlistDecoder_DecodeInfo-")
+	testPrefix := path.Join(decoderDataDir, "TestPlistDecoder_DecodeInfo-")
 
 	type args struct {
 		rawDisk string
@@ -28,18 +30,18 @@ func TestPlistDecoder_DecodeInfo(t *testing.T) {
 		args         args
 		useArgs      bool
 		testFileName string
-		wantDisk     *DiskInfo
+		wantDisk     *types.DiskInfo
 		wantErr      bool
 	}{
 		{
 			name:     "Good case: empty input",
 			args:     args{rawDisk: ""},
 			useArgs:  true,
-			wantDisk: &DiskInfo{},
+			wantDisk: &types.DiskInfo{},
 			wantErr:  false,
 		},
 		{
-			name:     "Bad case: garbage input",
+			name:     "Bad case: bad input",
 			args:     args{rawDisk: "abcdefghijklmnopqrstuvwxyz"},
 			useArgs:  true,
 			wantDisk: nil,
@@ -56,11 +58,11 @@ func TestPlistDecoder_DecodeInfo(t *testing.T) {
 			name:         "Good case: properly formatted (sparse) disk input",
 			useArgs:      false,
 			testFileName: testPrefix + "good-Info.txt",
-			wantDisk: &DiskInfo{
+			wantDisk: &types.DiskInfo{
 				AESHardware:            false,
 				APFSContainerReference: "disk2",
-				APFSPhysicalStores:     []APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
-				SMARTDeviceSpecificKeysMayVaryNotGuaranteed: &SmartDeviceInfo{AvailableSpare: 100},
+				APFSPhysicalStores:     []types.APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
+				SMARTDeviceSpecificKeysMayVaryNotGuaranteed: &types.SmartDeviceInfo{AvailableSpare: 100},
 			},
 			wantErr: false,
 		},
@@ -75,14 +77,14 @@ func TestPlistDecoder_DecodeInfo(t *testing.T) {
 			name:         "Good case: properly formatted (sparse) container input",
 			useArgs:      false,
 			testFileName: testPrefix + "good-Container.txt",
-			wantDisk: &DiskInfo{
-				ContainerInfo: ContainerInfo{
+			wantDisk: &types.DiskInfo{
+				ContainerInfo: types.ContainerInfo{
 					APFSContainerFree: 41477054464,
 					APFSContainerSize: 64214753280,
 				},
 				AESHardware:            false,
 				APFSContainerReference: "disk2",
-				APFSPhysicalStores:     []APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
+				APFSPhysicalStores:     []types.APFSPhysicalStore{{DeviceIdentifier: "disk0s2"}},
 			},
 			wantErr: false,
 		},
@@ -97,19 +99,19 @@ func TestPlistDecoder_DecodeInfo(t *testing.T) {
 			if tt.useArgs {
 				input = strings.NewReader(tt.args.rawDisk)
 			} else {
-				read, err := testDataFS.ReadFile(tt.testFileName)
+				read, err := decoderDataFS.ReadFile(tt.testFileName)
 				assert.Nil(t, err)
 
 				input = bytes.NewReader(read)
 			}
 
-			gotDisk, err := d.DecodeInfo(input)
+			gotDisk, err := d.DecodeDiskInfo(input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeInfo() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DecodeDiskInfo() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !assert.ObjectsAreEqualValues(gotDisk, tt.wantDisk) {
-				t.Errorf("DecodeInfo() gotDisk = %v, want %v", gotDisk, tt.wantDisk)
+				t.Errorf("DecodeDiskInfo() gotDisk = %v, want %v", gotDisk, tt.wantDisk)
 			}
 		})
 	}
@@ -117,7 +119,7 @@ func TestPlistDecoder_DecodeInfo(t *testing.T) {
 
 func TestPlistDecoder_DecodeList(t *testing.T) {
 	// testPrefix is the prefix used to load test data files from testDataFS
-	testPrefix := path.Join(testDataDir, "TestPlistDecoder_DecodeList-")
+	testPrefix := path.Join(decoderDataDir, "TestPlistDecoder_DecodeList-")
 
 	type args struct {
 		rawList string
@@ -127,7 +129,7 @@ func TestPlistDecoder_DecodeList(t *testing.T) {
 		args           args
 		useArgs        bool
 		testFileName   string
-		wantPartitions *SystemPartitions
+		wantPartitions *types.SystemPartitions
 		wantErr        bool
 	}{
 		{
@@ -141,24 +143,24 @@ func TestPlistDecoder_DecodeList(t *testing.T) {
 			name:         "Good case: properly formatted (sparse) input",
 			useArgs:      false,
 			testFileName: testPrefix + "good-List.txt",
-			wantPartitions: &SystemPartitions{
+			wantPartitions: &types.SystemPartitions{
 				AllDisks: []string{"disk0"},
-				AllDisksAndPartitions: []DiskPart{
+				AllDisksAndPartitions: []types.DiskPart{
 					{
 						DeviceIdentifier: "disk0",
-						Partitions: []Partition{
+						Partitions: []types.Partition{
 							{DeviceIdentifier: "disk0s1"},
 						},
 						Size: 121332826112,
 					},
 					{
-						APFSPhysicalStores: []APFSPhysicalStoreID{
+						APFSPhysicalStores: []types.APFSPhysicalStoreID{
 							{DeviceIdentifier: "disk0s2"},
 						},
-						APFSVolumes: []APFSVolume{
+						APFSVolumes: []types.APFSVolume{
 							{
 								DeviceIdentifier: "disk2s4",
-								MountedSnapshots: []Snapshot{
+								MountedSnapshots: []types.Snapshot{
 									{SnapshotUUID: "7CA60DB3-9063-4559-BC98-5BC05599DCF1"},
 								},
 							},
@@ -181,19 +183,19 @@ func TestPlistDecoder_DecodeList(t *testing.T) {
 			if tt.useArgs {
 				input = strings.NewReader(tt.args.rawList)
 			} else {
-				read, err := testDataFS.ReadFile(tt.testFileName)
+				read, err := decoderDataFS.ReadFile(tt.testFileName)
 				assert.Nil(t, err)
 
 				input = bytes.NewReader(read)
 			}
 
-			gotPartitions, err := d.DecodeList(input)
+			gotPartitions, err := d.DecodeSystemPartitions(input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeList() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DecodeSystemPartitions() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !assert.ObjectsAreEqualValues(gotPartitions, tt.wantPartitions) {
-				t.Errorf("DecodeList() gotPartitions = %v, want %v", gotPartitions, tt.wantPartitions)
+				t.Errorf("DecodeSystemPartitions() gotPartitions = %v, want %v", gotPartitions, tt.wantPartitions)
 			}
 		})
 	}

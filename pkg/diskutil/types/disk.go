@@ -1,6 +1,11 @@
-package diskutil
+package types
 
-// DiskInfo mirrors the output format of the command "diskutil info -plist <disk>" to store information about a disk.
+import (
+	"fmt"
+	"regexp"
+)
+
+// DiskInfo mirrors the output format of the command "diskutil info -plist <disk>" to store information about a d.
 type DiskInfo struct {
 	ContainerInfo
 	AESHardware                                 bool                `plist:"AESHardware"`
@@ -50,6 +55,35 @@ type DiskInfo struct {
 	Writable                                    bool                `plist:"Writable"`
 	WritableMedia                               bool                `plist:"WritableMedia"`
 	WritableVolume                              bool                `plist:"WritableVolume"`
+}
+
+// ParentDeviceID gets the parent device identifier for a physical store
+func (d *DiskInfo) ParentDeviceID() (id string, err error) {
+	// APFS Containers and Volumes are virtualized and should have a physical store which represents a physical disk
+	if d.APFSPhysicalStores == nil {
+		return "", fmt.Errorf("no physical stores found in disk")
+	}
+
+	// Check if there's more than one Physical Store in the disk's info. Having more than one APFS Physical Store
+	// is unexpected and the common case shouldn't violate this.
+	//
+	// Note: more than one physical store can indicate a fusion drive - https://support.apple.com/en-us/HT202574.
+	if len(d.APFSPhysicalStores) == 1 {
+		id = d.APFSPhysicalStores[0].DeviceIdentifier
+	} else {
+		return "", fmt.Errorf("expected 1 physical store but got [%d]", len(d.APFSPhysicalStores))
+	}
+
+	// Match the disk ID from the Physical Store's device identifier and remove extra partition information
+	// from it (e.g. "s4s1")
+	diskIDRegex := regexp.MustCompile("disk[0-9]+")
+	id = diskIDRegex.FindString(id)
+	if id == "" {
+		return "", fmt.Errorf("physical store [%s] does not contain the expected expression \"disk[0-9]+\"",
+			d.APFSPhysicalStores[0].DeviceIdentifier)
+	}
+
+	return id, nil
 }
 
 // ContainerInfo expands on DiskInfo to add extra information for APFS Containers.

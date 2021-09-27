@@ -35,7 +35,7 @@ func (d *DiskUtilityCmd) List(args []string) (string, error) {
 	}
 
 	// Execute the diskutil list command and store the output
-	cmdOut, err := util.ExecuteCommand(cmdListDisks, "", []string{})
+	cmdOut, err := util.ExecuteCommand(cmdListDisks, "", nil, nil)
 	if err != nil {
 		return cmdOut.Stdout, fmt.Errorf("diskutil: failed to run diskutil command to list all disks, stderr: [%s]: %v", cmdOut.Stderr, err)
 	}
@@ -43,7 +43,7 @@ func (d *DiskUtilityCmd) List(args []string) (string, error) {
 	return cmdOut.Stdout, nil
 }
 
-// Info uses the macOS diskutil info command to get detailed information about a disk, partition or container in a plist
+// Info uses the macOS diskutil info command to get detailed information about a disk, partition, or container
 // format by passing the -plist arg.
 func (d *DiskUtilityCmd) Info(id string) (string, error) {
 	// Create the diskutil command for retrieving disk information given a device identifier
@@ -52,7 +52,7 @@ func (d *DiskUtilityCmd) Info(id string) (string, error) {
 	cmdDiskInfo := []string{"diskutil", "info", "-plist", id}
 
 	// Execute the diskutil info command and store the output
-	cmdOut, err := util.ExecuteCommand(cmdDiskInfo, "", []string{})
+	cmdOut, err := util.ExecuteCommand(cmdDiskInfo, "", nil, nil)
 	if err != nil {
 		return cmdOut.Stdout, fmt.Errorf("diskutil: failed to run diskutil command to fetch disk information, stderr: [%s]: %v", cmdOut.Stderr, err)
 	}
@@ -63,8 +63,8 @@ func (d *DiskUtilityCmd) Info(id string) (string, error) {
 // RepairDisk uses the macOS diskutil diskRepair command to repair the specified volume and get updated information
 // (e.g. amount of free space).
 func (d *DiskUtilityCmd) RepairDisk(id string) (string, error) {
-	// cmdRepairDisk represents the command used for executing macOS's diskutil to repair a disk
-	// this is done by having zsh directly execute the diskutil command and provide "yes" to skip manual typing
+	// cmdRepairDisk represents the command used for executing macOS's diskutil to repair a disk.
+	// The repairDisk command requires interactive-input ("yes"/"no") but is automated with util.ExecuteCommandYes.
 	//   * repairDisk - indicates that a disk is going to be repaired (used to fetch amount of free space)
 	//   * id - the device identifier for the disk to be repaired
 	cmdRepairDisk := []string{"diskutil", "repairDisk", id}
@@ -88,7 +88,7 @@ func (d *DiskUtilityCmd) ResizeContainer(id, size string) (string, error) {
 	cmdResizeContainer := []string{"diskutil", "apfs", "resizeContainer", id, size}
 
 	// Execute the diskutil apfs resizeContainer command and store the output
-	cmdOut, err := util.ExecuteCommand(cmdResizeContainer, "", []string{})
+	cmdOut, err := util.ExecuteCommand(cmdResizeContainer, "", nil, nil)
 	if err != nil {
 		return cmdOut.Stdout, fmt.Errorf("diskutil: failed to run diskutil command to resize the container, stderr [%s]: %v", cmdOut.Stderr, err)
 	}

@@ -3,17 +3,16 @@ package system
 
 import (
 	"fmt"
-	"howett.net/plist"
 	"io"
 	"os"
+
+	"howett.net/plist"
 )
 
-const (
-	// VersionPath is the path on the root filesystem to the SystemVersion plist
-	VersionPath = "/System/Library/CoreServices/SystemVersion.plist"
-)
+// versionPath is the path on the root filesystem to the SystemVersion plist
+const versionPath = "/System/Library/CoreServices/SystemVersion.plist"
 
-// VersionInfo mirrors the raw data found in VersionPath
+// VersionInfo mirrors the raw data found in versionPath
 type VersionInfo struct {
 	ProductBuildVersion       string `plist:"ProductBuildVersion"`
 	ProductCopyright          string `plist:"ProductCopyright"`
@@ -24,12 +23,12 @@ type VersionInfo struct {
 }
 
 // Product determines the specific product that the VersionInfo.ProductVersion is associated with
-func (v *VersionInfo) Product() (Product, error) {
-	return ProductFromVersion(v.ProductVersion)
+func (v *VersionInfo) Product() (*Product, error) {
+	return NewProduct(v.ProductVersion)
 }
 
-// NewVersionInfo attempts to decode the raw data from the reader into a new VersionInfo struct.
-func NewVersionInfo(reader io.ReadSeeker) (version *VersionInfo, err error) {
+// decodeVersionInfo attempts to decode the raw data from the reader into a new VersionInfo struct.
+func decodeVersionInfo(reader io.ReadSeeker) (version *VersionInfo, err error) {
 	// Catch panics thrown by the Decode method
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
@@ -51,16 +50,16 @@ func NewVersionInfo(reader io.ReadSeeker) (version *VersionInfo, err error) {
 	return version, nil
 }
 
-// ReadVersion opens the VersionPath and calls NewVersionInfo to read and parse the raw plist into a new VersionInfo.
+// ReadVersion opens the versionPath and calls decodeVersionInfo to read and parse the raw plist into a new VersionInfo.
 func ReadVersion() (*VersionInfo, error) {
 	// Open the SystemVersion.plist file
-	versionReader, err := os.Open(VersionPath)
+	versionReader, err := os.Open(versionPath)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get the VersionInfo from the reader
-	version, err := NewVersionInfo(versionReader)
+	version, err := decodeVersionInfo(versionReader)
 	if err != nil {
 		return nil, err
 	}

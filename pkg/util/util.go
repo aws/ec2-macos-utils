@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/user"
@@ -18,19 +19,14 @@ type CommandOutput struct {
 }
 
 // ExecuteCommand executes the command and returns Stdout and Stderr as strings.
-func ExecuteCommand(c []string, runAsUser string, envVars []string) (output CommandOutput, err error) {
+func ExecuteCommand(c []string, runAsUser string, envVars []string, stdin io.ReadCloser) (output CommandOutput, err error) {
 	// Separate name and args, plus catch a few error cases
 	var name string
 	var args []string
 
 	// Check the empty struct case ([]string{}) for the command
 	if len(c) == 0 {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: must provide a command")
-	}
-
-	// Check the empty string case ("") for the first string in the command
-	if c[0] == "" {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: must provide a command")
+		return CommandOutput{}, fmt.Errorf("must provide a command")
 	}
 
 	// Set the name of the command and check if args are also provided
@@ -45,11 +41,16 @@ func ExecuteCommand(c []string, runAsUser string, envVars []string) (output Comm
 	cmd.Stdout = &stdoutb
 	cmd.Stderr = &stderrb
 
+	// Set command stdin if the stdin parameter is provided
+	if stdin != nil {
+		cmd.Stdin = stdin
+	}
+
 	// Set runAsUser, if defined, otherwise will run as root
 	if runAsUser != "" {
 		uid, gid, err := getUIDandGID(runAsUser)
 		if err != nil {
-			return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("ec2macosutils: error looking up user: %s\n", err)
+			return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("error looking up user: %s\n", err)
 		}
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
@@ -59,99 +60,55 @@ func ExecuteCommand(c []string, runAsUser string, envVars []string) (output Comm
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, envVars...)
 
-	// Run command
-	err = cmd.Run()
+	// Start the command's execution
+	if err = cmd.Start(); err != nil {
+		return CommandOutput{}, fmt.Errorf("error starting specified command: %w", err)
+	}
+
+	// Wait for the command to exit
+	if err = cmd.Wait(); err != nil {
+		return CommandOutput{}, fmt.Errorf("error waiting for specified command to exit: %w", err)
+	}
 
 	return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, err
 }
 
 // ExecuteCommandYes wraps ExecuteCommand with the yes binary in order to bypass user input states in automation.
 func ExecuteCommandYes(c []string, runAsUser string, envVars []string) (output CommandOutput, err error) {
-	// Separate name and args, plus catch a few error cases
-	var name string
-	var args []string
-
-	// Check the empty struct case ([]string{}) for the command
-	if len(c) == 0 {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: must provide a command")
-	}
-
-	// Check the empty string case ("") for the first string in the command
-	if c[0] == "" {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: must provide a command")
-	}
-
-	// Set the name of the command and check if args are also provided
-	name = c[0]
-	if len(c) > 1 {
-		args = c[1:]
-	}
-
 	// Set exec commands, one for yes and another for the specified command
 	cmdYes := exec.Command("/usr/bin/yes")
-	cmd := exec.Command(name, args...)
 
 	// Pipe cmdYes into cmd
-	if cmd.Stdin, err = cmdYes.StdoutPipe(); err != nil {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: error creating pipe between commands")
+	stdin, err := cmdYes.StdoutPipe()
+	if err != nil {
+		return CommandOutput{}, fmt.Errorf("error creating pipe between commands")
 	}
-
-	// Set the output buffers
-	var stdoutb, stderrb bytes.Buffer
-	cmd.Stdout = &stdoutb
-	cmd.Stderr = &stderrb
-
-	// Set runAsUser, if defined, otherwise will run as root
-	if runAsUser != "" {
-		uid, gid, err := getUIDandGID(runAsUser)
-		if err != nil {
-			return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("ec2macosutils: error looking up user: %w", err)
-		}
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
-	}
-
-	// Append environment variables
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, envVars...)
 
 	// Start the command to run /usr/bin/yes
 	if err = cmdYes.Start(); err != nil {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: error starting /usr/bin/yes command: %w", err)
+		return CommandOutput{}, fmt.Errorf("error starting /usr/bin/yes command: %w", err)
 	}
 
-	// Start the command to run the command given in c
-	if err = cmd.Start(); err != nil {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: error starting specified command: %w", err)
-	}
+	// Execute the given command (c)
+	out, err := ExecuteCommand(c, runAsUser, envVars, stdin)
 
-	// Wait for the command given in c to exit
-	if err = cmd.Wait(); err != nil {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: error waiting for specified command to exit: %w", err)
-	}
-
-	// Wait for the yes command to exit
-	if err = cmdYes.Wait(); err != nil {
-		return CommandOutput{}, fmt.Errorf("ec2macosutils: error waiting for /usr/bin/yes to exit: %w", err)
-	}
-
-	return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, err
+	return out, err
 }
 
 // getUIDandGID takes a username and returns the uid and gid for that user.
 // While testing UID/GID lookup for a user, it was found that the user.Lookup() function does not always return
-// information for a new user on first boot. In the case that user.Lookup() fails, we try dscacheutil, which has a
-// higher success rate. If that fails, we return an error. Any successful case returns the UID and GID as ints.
+// information for a new user on first boot. In the case that user.Lookup() fails, try dscacheutil, which has a
+// higher success rate. If that fails, return an error. Any successful case returns the UID and GID as ints.
 func getUIDandGID(username string) (uid int, gid int, err error) {
 	var uidstr, gidstr string
 	// Preference is user.Lookup(), if it works
 	u, lookuperr := user.Lookup(username)
 	if lookuperr != nil {
 		// user.Lookup() has failed, second try by checking the DS cache
-		out, cmderr := ExecuteCommand([]string{"dscacheutil", "-q", "user", "-a", "name", username}, "", []string{})
+		out, cmderr := ExecuteCommand([]string{"dscacheutil", "-q", "user", "-a", "name", username}, "", []string{}, nil)
 		if cmderr != nil {
 			// dscacheutil has failed with an error
-			return 0, 0, fmt.Errorf("ec2macosutils: error while looking up user %s: \n"+
+			return 0, 0, fmt.Errorf("error while looking up user %s: \n"+
 				"user.Lookup() error: %s \ndscacheutil error: %s\ndscacheutil Stderr: %s\n",
 				username, lookuperr, cmderr, out.Stderr)
 		}
@@ -172,7 +129,7 @@ func getUIDandGID(username string) (uid int, gid int, err error) {
 				if strings.HasPrefix(e, "uid") {
 					if len(eSplit) != 2 {
 						// dscacheutil has returned some sort of weird output that can't be split
-						return 0, 0, fmt.Errorf("ec2macosutils: error while splitting dscacheutil uid output for user %s: %s\n"+
+						return 0, 0, fmt.Errorf("error while splitting dscacheutil uid output for user %s: %s\n"+
 							"user.Lookup() error: %s \ndscacheutil error: %s\ndscacheutil Stderr: %s\n",
 							username, out.Stdout, lookuperr, cmderr, out.Stderr)
 					}
@@ -180,7 +137,7 @@ func getUIDandGID(username string) (uid int, gid int, err error) {
 				} else if strings.HasPrefix(e, "gid") {
 					if len(eSplit) != 2 {
 						// dscacheutil has returned some sort of weird output that can't be split
-						return 0, 0, fmt.Errorf("ec2macosutils: error while splitting dscacheutil gid output for user %s: %s\n"+
+						return 0, 0, fmt.Errorf("error while splitting dscacheutil gid output for user %s: %s\n"+
 							"user.Lookup() error: %s \ndscacheutil error: %s\ndscacheutil Stderr: %s\n",
 							username, out.Stdout, lookuperr, cmderr, out.Stderr)
 					}
@@ -189,7 +146,7 @@ func getUIDandGID(username string) (uid int, gid int, err error) {
 			}
 		} else {
 			// dscacheutil has returned nothing, user is not found
-			return 0, 0, fmt.Errorf("ec2macosutils: user %s not found: \n"+
+			return 0, 0, fmt.Errorf("user %s not found: \n"+
 				"user.Lookup() error: %s \ndscacheutil error: %s\ndscacheutil Stderr: %s\n",
 				username, lookuperr, cmderr, out.Stderr)
 		}
@@ -202,11 +159,11 @@ func getUIDandGID(username string) (uid int, gid int, err error) {
 	// Convert UID and GID to int
 	uid, err = strconv.Atoi(uidstr)
 	if err != nil {
-		return 0, 0, fmt.Errorf("ec2macosutils: error while converting UID to int: %s\n", err)
+		return 0, 0, fmt.Errorf("error while converting UID to int: %s\n", err)
 	}
 	gid, err = strconv.Atoi(gidstr)
 	if err != nil {
-		return 0, 0, fmt.Errorf("ec2macosutils: error while converting GID to int: %s\n", err)
+		return 0, 0, fmt.Errorf("error while converting GID to int: %s\n", err)
 	}
 
 	return uid, gid, nil

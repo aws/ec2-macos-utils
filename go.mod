@@ -3,6 +3,7 @@ module github.com/aws/ec2-macos-utils
 go 1.16
 
 require (
+	github.com/Masterminds/semver v1.5.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/golang/mock v1.3.1
 	github.com/sirupsen/logrus v1.8.1

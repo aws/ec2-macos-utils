@@ -1,5 +1,5 @@
-build
+/build
 gen
-bin
+/bin
 go.mod
 go.sum
