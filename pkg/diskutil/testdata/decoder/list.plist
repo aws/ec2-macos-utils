@@ -19,7 +19,7 @@
                 </dict>
             </array>
             <key>Size</key>
-            <integer>121332826112</integer>
+            <integer>1000000</integer>
         </dict>
         <dict>
             <key>APFSPhysicalStores</key>
@@ -38,7 +38,7 @@
                     <array>
                         <dict>
                             <key>SnapshotUUID</key>
-                            <string>7CA60DB3-9063-4559-BC98-5BC05599DCF1</string>
+                            <string>AAAAAAAA-BBBB-CCCC-DDDD-FFFFFFFFFFFF</string>
                         </dict>
                     </array>
                 </dict>

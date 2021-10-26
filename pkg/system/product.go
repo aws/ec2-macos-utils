@@ -32,15 +32,20 @@ func (r Release) String() string {
 }
 
 var (
-	mojaveConstraints   *semver.Constraints
-	catalinaConstraints *semver.Constraints
-	bigsurConstraints   *semver.Constraints
+	// mojaveConstraints are the constraints used to identify Mojave versions (10.14.x).
+	mojaveConstraints = mustInitConstraint(semver.NewConstraint("~10.14"))
+	// catalinaConstraints are the constraints used to identify Catalina versions (10.15.x).
+	catalinaConstraints = mustInitConstraint(semver.NewConstraint("~10.15"))
+	// bigSurConstraints are the constraints used to identify BigSur versions (11.x.x or 10.16.x).
+	bigSurConstraints = mustInitConstraint(semver.NewConstraint("~11 || ~10.16"))
 )
 
-func init() {
-	mojaveConstraints, _ = semver.NewConstraint("~10.14")
-	catalinaConstraints, _ = semver.NewConstraint("~10.15")
-	bigsurConstraints, _ = semver.NewConstraint("~11 || ~10.16")
+// mustInitConstraint ensures that a semver.Constraints can be initialized and used.
+func mustInitConstraint(c *semver.Constraints, err error) *semver.Constraints {
+	if err != nil {
+		panic(fmt.Errorf("must initialize semver constraint: %w", err))
+	}
+	return c
 }
 
 // Product identifies a macOS release and product version (e.g. Big Sur 11.x).
@@ -53,9 +58,9 @@ func (p Product) String() string {
 	return fmt.Sprintf("macOS %s %s", p.Release, p.Version.String())
 }
 
-// NewProduct initializes a new Product given the version string as input. It attempts to parse the version into a new
+// newProduct initializes a new Product given the version string as input. It attempts to parse the version into a new
 // semver.Version and then checks the version's constraints to identify the Release.
-func NewProduct(version string) (*Product, error) {
+func newProduct(version string) (*Product, error) {
 	ver, err := semver.NewVersion(version)
 	if err != nil {
 		return nil, err
@@ -81,7 +86,7 @@ func getVersionRelease(version semver.Version) (Release, error) {
 		return Mojave, nil
 	case catalinaConstraints.Check(&version):
 		return Catalina, nil
-	case bigsurConstraints.Check(&version):
+	case bigSurConstraints.Check(&version):
 		return BigSur, nil
 	}
 

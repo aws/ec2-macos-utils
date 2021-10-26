@@ -12,7 +12,37 @@ import (
 // versionPath is the path on the root filesystem to the SystemVersion plist
 const versionPath = "/System/Library/CoreServices/SystemVersion.plist"
 
-// VersionInfo mirrors the raw data found in versionPath
+// System correlates VersionInfo with a Product.
+type System struct {
+	versionInfo *VersionInfo
+	product     *Product
+}
+
+func (sys *System) Product() *Product {
+	return sys.product
+}
+
+// Scan reads the VersionInfo and creates a new System struct from that and the associated Product.
+func Scan() (*System, error) {
+	version, err := readVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	product, err := version.Product()
+	if err != nil {
+		return nil, err
+	}
+
+	system := &System{
+		versionInfo: version,
+		product:     product,
+	}
+
+	return system, nil
+}
+
+// VersionInfo mirrors the raw data found in the SystemVersion plist file.
 type VersionInfo struct {
 	ProductBuildVersion       string `plist:"ProductBuildVersion"`
 	ProductCopyright          string `plist:"ProductCopyright"`
@@ -22,21 +52,13 @@ type VersionInfo struct {
 	IOSSupportVersion         string `plist:"iOSSupportVersion"`
 }
 
-// Product determines the specific product that the VersionInfo.ProductVersion is associated with
+// Product determines the specific product that the VersionInfo.ProductVersion is associated with.
 func (v *VersionInfo) Product() (*Product, error) {
-	return NewProduct(v.ProductVersion)
+	return newProduct(v.ProductVersion)
 }
 
 // decodeVersionInfo attempts to decode the raw data from the reader into a new VersionInfo struct.
 func decodeVersionInfo(reader io.ReadSeeker) (version *VersionInfo, err error) {
-	// Catch panics thrown by the Decode method
-	defer func() {
-		if panicErr := recover(); panicErr != nil {
-			version = nil
-			err = fmt.Errorf("system panic occured while decoding: %s", panicErr)
-		}
-	}()
-
 	// Create a reader from the raw data and create a new decoder
 	version = &VersionInfo{}
 	decoder := plist.NewDecoder(reader)
@@ -50,8 +72,8 @@ func decodeVersionInfo(reader io.ReadSeeker) (version *VersionInfo, err error) {
 	return version, nil
 }
 
-// ReadVersion opens the versionPath and calls decodeVersionInfo to read and parse the raw plist into a new VersionInfo.
-func ReadVersion() (*VersionInfo, error) {
+// readVersion opens the versionPath and calls decodeVersionInfo to read and parse the raw plist into a new VersionInfo.
+func readVersion() (*VersionInfo, error) {
 	// Open the SystemVersion.plist file
 	versionReader, err := os.Open(versionPath)
 	if err != nil {

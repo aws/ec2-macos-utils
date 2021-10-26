@@ -1,363 +1,507 @@
 package diskutil
 
 import (
-	"bytes"
-	"embed"
 	"fmt"
-	"path"
+	"io/ioutil"
 	"testing"
 
 	mock_diskutil "github.com/aws/ec2-macos-utils/pkg/diskutil/mocks"
 	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
 
-	"github.com/dustin/go-humanize"
 	"github.com/golang/mock/gomock"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
-//go:embed testdata/grow
-var growDataFS embed.FS
+func init() {
+	logrus.SetOutput(ioutil.Discard)
+}
 
-const (
-	growDataDir = "testdata/grow"
-)
+func TestGrowContainer_WithoutContainer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-func TestGrowContainer(t *testing.T) {
-	// testPrefix is the prefix used to load test data files from testDataFS
-	testPrefix := path.Join(growDataDir, "TestGrowContainer-")
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
 
+	err := GrowContainer(mockUtility, nil)
+
+	assert.Error(t, err, "shouldn't be able to grow container with nil container")
+}
+
+func TestGrowContainer_WithEmptyContainer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+
+	disk := types.DiskInfo{}
+
+	err := GrowContainer(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to grow container with empty container")
+}
+
+func TestGrowContainer_WithInfoErr(t *testing.T) {
+	const testDiskID = "disk1"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	mockUtility.EXPECT().Info(testDiskID).Return(nil, fmt.Errorf("error"))
+
+	disk := types.DiskInfo{
+		ContainerInfo: types.ContainerInfo{
+			FilesystemType: "apfs",
+		},
+		ParentWholeDisk:   testDiskID,
+		VirtualOrPhysical: "Virtual",
+	}
+
+	err := GrowContainer(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to grow container with info error")
+}
+
+func TestGrowContainer_WithRepairDiskErr(t *testing.T) {
+	const testDiskID = "disk1"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	mockUtility.EXPECT().RepairDisk(testDiskID).Return("", fmt.Errorf("error"))
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+		ContainerInfo: types.ContainerInfo{
+			FilesystemType: "apfs",
+		},
+		ParentWholeDisk:   testDiskID,
+		VirtualOrPhysical: "Physical",
+	}
+
+	err := GrowContainer(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to grow container with repair disk error")
+}
+
+func TestGrowContainer_WithListError(t *testing.T) {
+	const testDiskID = "disk1"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	gomock.InOrder(
+		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(nil).Return(nil, fmt.Errorf("error")),
+	)
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+		ContainerInfo: types.ContainerInfo{
+			FilesystemType: "apfs",
+		},
+		ParentWholeDisk:   testDiskID,
+		VirtualOrPhysical: "Physical",
+	}
+
+	err := GrowContainer(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to grow container with list error")
+}
+
+func TestGrowContainer_WithoutFreeSpace(t *testing.T) {
+	const (
+		testDiskID = "disk1"
+		// total disk size
+		diskSize uint64 = 1_000_000
+		// individual partition space occupied
+		partSize uint64 = 500_000
+		// expected amount of free space
+		expectedFreeSpace = 0
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	parts := types.SystemPartitions{
+		AllDisksAndPartitions: []types.DiskPart{
+			{
+				DeviceIdentifier: testDiskID,
+				Size:             diskSize,
+				Partitions: []types.Partition{
+					{Size: partSize},
+					{Size: partSize},
+				},
+			},
+		},
+	}
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	gomock.InOrder(
+		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(nil).Return(&parts, nil),
+	)
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+		ContainerInfo: types.ContainerInfo{
+			FilesystemType: "apfs",
+		},
+		ParentWholeDisk:   testDiskID,
+		VirtualOrPhysical: "Physical",
+	}
+
+	expectedErr := fmt.Errorf("not enough space to resize container: %w", FreeSpaceError{expectedFreeSpace})
+
+	actualErr := GrowContainer(mockUtility, &disk)
+
+	assert.Error(t, actualErr, "shouldn't be able to grow container without free space")
+	assert.Equal(t, expectedErr, actualErr, "should get FreeSpaceError since there's no free space")
+}
+
+func TestGrowContainer_WithResizeContainerError(t *testing.T) {
+	const (
+		testDiskID = "disk1"
+		// total disk size
+		diskSize uint64 = 3_000_000
+		// individual partition space occupied
+		partSize uint64 = 500_000
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	parts := types.SystemPartitions{
+		AllDisksAndPartitions: []types.DiskPart{
+			{
+				DeviceIdentifier: testDiskID,
+				Size:             diskSize,
+				Partitions: []types.Partition{
+					{Size: partSize},
+					{Size: partSize},
+				},
+			},
+		},
+	}
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	gomock.InOrder(
+		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(nil).Return(&parts, nil),
+		mockUtility.EXPECT().ResizeContainer(testDiskID, "0").Return("", fmt.Errorf("error")),
+	)
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+		ContainerInfo: types.ContainerInfo{
+			FilesystemType: "apfs",
+		},
+		DeviceIdentifier:  testDiskID,
+		ParentWholeDisk:   testDiskID,
+		VirtualOrPhysical: "Physical",
+	}
+
+	err := GrowContainer(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to grow container with resize container error")
+}
+
+func TestGrowContainer_Success(t *testing.T) {
+	const (
+		testDiskID = "disk1"
+		// total disk size
+		diskSize uint64 = 3_000_000
+		// individual partition space occupied
+		partSize uint64 = 500_000
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	parts := types.SystemPartitions{
+		AllDisksAndPartitions: []types.DiskPart{
+			{
+				DeviceIdentifier: testDiskID,
+				Size:             diskSize,
+				Partitions: []types.Partition{
+					{Size: partSize},
+					{Size: partSize},
+				},
+			},
+		},
+	}
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	gomock.InOrder(
+		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(nil).Return(&parts, nil),
+		mockUtility.EXPECT().ResizeContainer(testDiskID, "0").Return("", nil),
+	)
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+		ContainerInfo: types.ContainerInfo{
+			FilesystemType: "apfs",
+		},
+		DeviceIdentifier:  testDiskID,
+		ParentWholeDisk:   testDiskID,
+		VirtualOrPhysical: "Physical",
+	}
+
+	err := GrowContainer(mockUtility, &disk)
+
+	assert.NoError(t, err, "should be able to grow container")
+}
+
+func TestCanAPFSResize(t *testing.T) {
 	type args struct {
-		disk       *types.DiskInfo
-		partitions *types.SystemPartitions
+		container *types.DiskInfo
 	}
 	tests := []struct {
-		name        string
-		args        args
-		configure   func(utility *mock_diskutil.MockDiskUtil)
-		wantMessage string
-		wantErr     bool
-		wantErrType error
+		name    string
+		args    args
+		wantErr bool
 	}{
 		{
-			name: "Bad case: not enough free space in parent disk to repair",
+			name: "WithoutContainer",
 			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier: "disk1",
-					APFSPhysicalStores: []types.APFSPhysicalStore{
-						{DeviceIdentifier: "disk0s2"},
-					},
-				},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{
-							DeviceIdentifier: "disk0",
-							Size:             MinimumGrowSpaceRequired,
-							Partitions: []types.Partition{
-								{Size: MinimumGrowSpaceRequired / 2},
-							},
-						},
-						{DeviceIdentifier: "disk1"},
-					},
-				},
+				container: nil,
 			},
-			configure:   nil,
-			wantMessage: "",
-			wantErr:     true,
-			wantErrType: MinimumGrowSpaceError{},
+			wantErr: true,
 		},
 		{
-			name: "Bad case: failed to resize the container",
+			name: "WithEmptyContainer",
 			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier: "disk1",
-					APFSPhysicalStores: []types.APFSPhysicalStore{
-						{DeviceIdentifier: "disk0s2"},
-					},
-				},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{
-							DeviceIdentifier: "disk0",
-							Size:             MinimumGrowSpaceRequired * 2,
-							Partitions: []types.Partition{
-								{Size: MinimumGrowSpaceRequired / 2},
-							},
-						},
-						{DeviceIdentifier: "disk1"},
-					},
+				container: &types.DiskInfo{
+					ContainerInfo: types.ContainerInfo{},
 				},
 			},
-			configure: func(utility *mock_diskutil.MockDiskUtil) {
-				gomock.InOrder(
-					utility.EXPECT().RepairDisk("disk0").Return("", nil),
-					utility.EXPECT().ResizeContainer("disk1", "0").
-						Return("error", fmt.Errorf("error")),
-				)
-			},
-			wantMessage: fmt.Sprint("error"),
-			wantErr:     true,
-			wantErrType: nil,
+			wantErr: true,
 		},
 		{
-			name: "Bad case: failed to fetch updated disk information after repair",
+			name: "WithoutAPFSContainer",
 			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier: "disk1",
-					APFSPhysicalStores: []types.APFSPhysicalStore{
-						{DeviceIdentifier: "disk0s2"},
-					},
-				},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{
-							DeviceIdentifier: "disk0",
-							Size:             MinimumGrowSpaceRequired * 2,
-							Partitions: []types.Partition{
-								{Size: MinimumGrowSpaceRequired / 2},
-							},
-						},
-						{DeviceIdentifier: "disk1"},
+				container: &types.DiskInfo{
+					ContainerInfo: types.ContainerInfo{
+						FilesystemType: "not apfs",
 					},
 				},
 			},
-			configure: func(utility *mock_diskutil.MockDiskUtil) {
-				gomock.InOrder(
-					utility.EXPECT().RepairDisk("disk0").Return("", nil),
-					utility.EXPECT().ResizeContainer("disk1", "0").Return("success", nil),
-					utility.EXPECT().Info("disk1").Return(nil, fmt.Errorf("error")),
-				)
-			},
-			wantMessage: fmt.Sprintf("failed to fetch updated disk information for container [%s]", "disk1"),
-			wantErr:     true,
-			wantErrType: nil,
+			wantErr: true,
 		},
 		{
-			name: "Good case: successfully resized the container and fetched the updated information",
+			name: "Success",
 			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier: "disk1",
-					APFSPhysicalStores: []types.APFSPhysicalStore{
-						{DeviceIdentifier: "disk0s2"},
-					},
-				},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{
-							DeviceIdentifier: "disk0",
-							Size:             MinimumGrowSpaceRequired * 2,
-							Partitions: []types.Partition{
-								{Size: MinimumGrowSpaceRequired / 2},
-							},
-						},
-						{DeviceIdentifier: "disk1"},
+				container: &types.DiskInfo{
+					ContainerInfo: types.ContainerInfo{
+						FilesystemType: "apfs",
 					},
 				},
 			},
-			configure: func(utility *mock_diskutil.MockDiskUtil) {
-				rawInfoOutput, err := growDataFS.ReadFile(testPrefix + "good-Info.txt")
-				assert.Nil(t, err)
-
-				decoder := &PlistDecoder{}
-				info, err := decoder.DecodeDiskInfo(bytes.NewReader(rawInfoOutput))
-				assert.Nil(t, err)
-
-				gomock.InOrder(
-					utility.EXPECT().RepairDisk("disk0").Return("", nil),
-					utility.EXPECT().ResizeContainer("disk1", "0").Return("success", nil),
-					utility.EXPECT().Info("disk1").Return(info, nil),
-				)
-			},
-			wantMessage: fmt.Sprintf("grew container [%s] to size [%s]", "disk1", humanize.Bytes(1500000)),
-			wantErr:     false,
-			wantErrType: nil,
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+			err := canAPFSResize(tt.args.container)
 
-			mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-
-			// If the test has a configure function, initialize the mock utility and configure it for the test to use
-			if tt.configure != nil {
-				tt.configure(mockUtility)
-			}
-
-			gotMessage, err := GrowContainer(tt.args.disk, tt.args.partitions, mockUtility)
-			if err != nil {
-				if !tt.wantErr {
-					t.Errorf("growContainer() error = %v, wantErr %v", err, tt.wantErr)
-					return
-				}
-				if tt.wantErrType != nil {
-					if !assert.IsType(t, tt.wantErrType, err) {
-						t.Errorf("growContainer() error = %T, wantErrType %T", err, tt.wantErrType)
-					}
-				}
-			}
-			if gotMessage != tt.wantMessage {
-				t.Errorf("growContainer() gotMessage = %v, want %v", gotMessage, tt.wantMessage)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
 }
 
-func Test_repairParentDisk(t *testing.T) {
-	type args struct {
-		disk       *types.DiskInfo
-		partitions *types.SystemPartitions
-	}
-	tests := []struct {
-		name        string
-		args        args
-		configure   func(utility *mock_diskutil.MockDiskUtil)
-		wantMessage string
-		wantErr     bool
-		wantErrType error
-	}{
-		{
-			name: "Bad case: error getting parent device ID from disk",
-			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier:   "disk0",
-					APFSPhysicalStores: nil,
-				},
-				partitions: nil,
-			},
-			configure:   nil,
-			wantMessage: "failed to get the parent disk ID for container [disk0]",
-			wantErr:     true,
-			wantErrType: nil,
-		},
-		{
-			name: "Bad case: error getting available free space for ID",
-			args: args{
-				disk: &types.DiskInfo{DeviceIdentifier: "disk2"},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{DeviceIdentifier: "disk0"},
-						{DeviceIdentifier: "disk1"},
-					},
-				},
-			},
-			configure:   nil,
-			wantMessage: "failed to get the parent disk ID for container [disk2]",
-			wantErr:     true,
-			wantErrType: nil,
-		},
-		{
-			name: "Bad case: not enough space on parent disk",
-			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier: "disk1",
-					APFSPhysicalStores: []types.APFSPhysicalStore{
-						{DeviceIdentifier: "disk0s2"},
-					},
-				},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{DeviceIdentifier: "disk0"},
-						{
-							DeviceIdentifier: "disk1",
-							Size:             MinimumGrowSpaceRequired,
-							Partitions: []types.Partition{
-								{Size: MinimumGrowSpaceRequired / 2},
-							},
-						},
-					},
+func TestGetDiskFreeSpace_WithListErr(t *testing.T) {
+	const expectedSize uint64 = 0
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	mockUtility.EXPECT().List(nil).Return(nil, fmt.Errorf("error"))
+
+	disk := types.DiskInfo{}
+
+	actual, err := getDiskFreeSpace(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to get free space with list error")
+	assert.Equal(t, expectedSize, actual, "shouldn't get size due to list error")
+}
+
+func TestGetDiskFreeSpace_WithNilSystemPartitions(t *testing.T) {
+	const expectedSize uint64 = 0
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	mockUtility.EXPECT().List(nil).Return(nil, nil)
+
+	disk := types.DiskInfo{}
+
+	actual, err := getDiskFreeSpace(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to get free space for nil partitions")
+	assert.Equal(t, expectedSize, actual, "shouldn't get size due to nil partitions")
+}
+
+func TestGetDiskFreeSpace_WithoutFreeSpace(t *testing.T) {
+	const (
+		testDiskID = "disk1"
+		// total disk size
+		diskSize uint64 = 1_000_000
+		// individual partition space occupied
+		partSize uint64 = 500_000
+		// should see: diskSize - (2 * partSize)
+		expectedFreeSpace uint64 = 0
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+
+	parts := types.SystemPartitions{
+		AllDisksAndPartitions: []types.DiskPart{
+			{
+				DeviceIdentifier: testDiskID,
+				Size:             diskSize,
+				Partitions: []types.Partition{
+					{Size: partSize},
+					{Size: partSize},
 				},
 			},
-			configure:   nil,
-			wantMessage: "",
-			wantErr:     true,
-			wantErrType: MinimumGrowSpaceError{},
-		},
-		{
-			name: "Bad case: error while attempting to repair the parent disk",
-			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier: "disk1",
-					APFSPhysicalStores: []types.APFSPhysicalStore{
-						{DeviceIdentifier: "disk0s2"},
-					},
-				},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{DeviceIdentifier: "disk0",
-							Size: MinimumGrowSpaceRequired * 2,
-							Partitions: []types.Partition{
-								{Size: MinimumGrowSpaceRequired / 2},
-							},
-						},
-						{DeviceIdentifier: "disk1"},
-					},
-				},
-			},
-			configure: func(utility *mock_diskutil.MockDiskUtil) {
-				utility.EXPECT().RepairDisk("disk0").Return("error", fmt.Errorf("error"))
-			},
-			wantMessage: "error",
-			wantErr:     true,
-			wantErrType: nil,
-		},
-		{
-			name: "Good case: successfully repair the parent disk",
-			args: args{
-				disk: &types.DiskInfo{
-					DeviceIdentifier: "disk1",
-					APFSPhysicalStores: []types.APFSPhysicalStore{
-						{DeviceIdentifier: "disk0s2"},
-					},
-				},
-				partitions: &types.SystemPartitions{
-					AllDisksAndPartitions: []types.DiskPart{
-						{
-							DeviceIdentifier: "disk0",
-							Size:             MinimumGrowSpaceRequired * 2,
-							Partitions: []types.Partition{
-								{Size: MinimumGrowSpaceRequired / 2},
-							},
-						},
-						{DeviceIdentifier: "disk1"},
-					},
-				},
-			},
-			configure: func(utility *mock_diskutil.MockDiskUtil) {
-				utility.EXPECT().RepairDisk("disk0").Return("success", nil)
-			},
-			wantMessage: "success",
-			wantErr:     false,
-			wantErrType: nil,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+	mockUtility.EXPECT().List(nil).Return(&parts, nil)
 
-			mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-
-			// If the test has a configure function, initialize the mock utility and configure it for the test to use
-			if tt.configure != nil {
-				tt.configure(mockUtility)
-			}
-
-			gotMessage, err := repairParentDisk(tt.args.disk, tt.args.partitions, mockUtility)
-			if err != nil {
-				if !tt.wantErr {
-					t.Errorf("repairParentDisk() error = %v, wantErr %v", err, tt.wantErr)
-					return
-				}
-				if tt.wantErrType != nil {
-					if !assert.IsType(t, tt.wantErrType, err) {
-						t.Errorf("repairParentDisk() error = %T, wantErrType %T", err, tt.wantErrType)
-					}
-				}
-			}
-			if gotMessage != tt.wantMessage {
-				t.Errorf("repairParentDisk() gotMessage = %v, want %v", gotMessage, tt.wantMessage)
-			}
-		})
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
 	}
+
+	actual, err := getDiskFreeSpace(mockUtility, &disk)
+
+	assert.NoError(t, err, "should be able to calculate free space with valid data")
+	assert.Equal(t, expectedFreeSpace, actual, "should have calculated free space based on partitions")
+}
+
+func TestGetDiskFreeSpace_FreeSpace(t *testing.T) {
+	const (
+		testDiskID = "disk1"
+		// total disk size
+		diskSize uint64 = 2_000_000
+		// individual partition space occupied
+		partSize uint64 = 500_000
+		// should see: diskSize - (2 * partSize)
+		expectedFreeSpace uint64 = 1_000_000
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+
+	parts := types.SystemPartitions{
+		AllDisksAndPartitions: []types.DiskPart{
+			{
+				DeviceIdentifier: testDiskID,
+				Size:             diskSize,
+				Partitions: []types.Partition{
+					{Size: partSize},
+					{Size: partSize},
+				},
+			},
+		},
+	}
+	mockUtility.EXPECT().List(nil).Return(&parts, nil)
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+	}
+
+	actual, err := getDiskFreeSpace(mockUtility, &disk)
+
+	assert.NoError(t, err, "should be able to calculate free space with valid data")
+	assert.Equal(t, expectedFreeSpace, actual, "should have calculated free space based on partitions")
+}
+
+func TestRepairParentDisk_WithoutDiskInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+
+	disk := types.DiskInfo{}
+	expectedMessage := fmt.Sprintf("failed to get the parent disk ID for container [%s]", disk.DeviceIdentifier)
+
+	actualMessage, err := repairParentDisk(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to repair disk without disk info")
+	assert.Equal(t, expectedMessage, actualMessage, "should see error message for device")
+}
+
+func TestRepairParentDisk_WithRepairDiskErr(t *testing.T) {
+	const testDiskID = "disk0"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	mockUtility.EXPECT().RepairDisk(testDiskID).Return("error", fmt.Errorf("error"))
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+	}
+	expectedMessage := "error"
+
+	actualMessage, err := repairParentDisk(mockUtility, &disk)
+
+	assert.Error(t, err, "shouldn't be able to repair parent disk with repair disk error")
+	assert.Equal(t, expectedMessage, actualMessage, "should see error message for device")
+}
+
+func TestRepairParentDisk_Success(t *testing.T) {
+	const (
+		testDiskID      = "disk0"
+		expectedMessage = ""
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
+	mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil)
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+	}
+
+	actualMessage, err := repairParentDisk(mockUtility, &disk)
+
+	assert.NoError(t, err, "should be able to repair parent with valid data")
+	assert.Equal(t, expectedMessage, actualMessage, "should see expected message")
 }

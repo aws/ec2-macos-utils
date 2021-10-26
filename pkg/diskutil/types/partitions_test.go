@@ -1,83 +1,60 @@
 package types
 
-import "testing"
+import (
+	"testing"
 
-func TestSystemPartitions_availableDiskSpace(t *testing.T) {
-	type fields struct {
-		AllDisks              []string
-		AllDisksAndPartitions []DiskPart
-		VolumesFromDisks      []string
-		WholeDisks            []string
-	}
-	type args struct {
-		id string
-	}
-	tests := []struct {
-		name     string
-		fields   fields
-		args     args
-		wantSize uint64
-		wantErr  bool
-	}{
-		{
-			name: "Bad case: ID not found in system partitions",
-			fields: fields{
-				AllDisks: nil,
-				AllDisksAndPartitions: []DiskPart{
-					{DeviceIdentifier: "disk0"},
-					{DeviceIdentifier: "disk1"},
-					{DeviceIdentifier: "disk2"},
-				},
-				VolumesFromDisks: nil,
-				WholeDisks:       nil,
-			},
-			args: args{
-				id: "disk3",
-			},
-			wantSize: 0,
-			wantErr:  true,
-		},
-		{
-			name: "Good case: ID found in system partitions and size matches",
-			fields: fields{
-				AllDisks: nil,
-				AllDisksAndPartitions: []DiskPart{
-					{DeviceIdentifier: "disk0"},
-					{
-						DeviceIdentifier: "disk1",
-						Size:             2000000,
-						Partitions: []Partition{
-							{Size: 500000},
-							{Size: 500000},
-						},
-					},
-				},
-				VolumesFromDisks: nil,
-				WholeDisks:       nil,
-			},
-			args: args{
-				id: "disk1",
-			},
-			wantSize: 1000000,
-			wantErr:  false,
+	"github.com/stretchr/testify/assert"
+)
+
+func TestSystemPartitions_AvailableDiskSpace_WithoutTargetDisk(t *testing.T) {
+	const (
+		testDiskID = "disk3"
+		// should see 0 since testDiskID isn't in AllDisksAndPartitions
+		expectedAvailableSize uint64 = 0
+	)
+
+	p := &SystemPartitions{
+		AllDisksAndPartitions: []DiskPart{
+			{DeviceIdentifier: "disk0"},
+			{DeviceIdentifier: "disk1"},
+			{DeviceIdentifier: "disk2"},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &SystemPartitions{
-				AllDisks:              tt.fields.AllDisks,
-				AllDisksAndPartitions: tt.fields.AllDisksAndPartitions,
-				VolumesFromDisks:      tt.fields.VolumesFromDisks,
-				WholeDisks:            tt.fields.WholeDisks,
-			}
-			gotSize, err := p.AvailableDiskSpace(tt.args.id)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("AvailableDiskSpace() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if gotSize != tt.wantSize {
-				t.Errorf("AvailableDiskSpace() gotSize = %v, want %v", gotSize, tt.wantSize)
-			}
-		})
+
+	actual, err := p.AvailableDiskSpace(testDiskID)
+
+	assert.Error(t, err, "shouldn't be able to find disk in partitions")
+	assert.Equal(t, expectedAvailableSize, actual, "shouldn't return anything since the disk doesn't exist")
+}
+
+func TestSystemPartitions_AvailableDiskSpace_GoodDisk(t *testing.T) {
+	const (
+		testDiskID = "disk1"
+		// total disk size
+		diskSize uint64 = 2_000_000
+		// individual partition space occupied
+		partSize uint64 = 250_000
+		// should see: diskSize - (2 * partSize)
+		expectedAvailableSize uint64 = 1_500_000
+	)
+
+	p := &SystemPartitions{
+		AllDisksAndPartitions: []DiskPart{
+			// Non-targeted disk, should be skipped
+			{DeviceIdentifier: "disk0"},
+			{
+				DeviceIdentifier: "disk1",
+				Size:             diskSize,
+				Partitions: []Partition{
+					{Size: partSize},
+					{Size: partSize},
+				},
+			},
+		},
 	}
+
+	actual, err := p.AvailableDiskSpace(testDiskID)
+
+	assert.NoError(t, err, "should be able to calculate free space with valid data")
+	assert.Equal(t, expectedAvailableSize, actual, "should have calculated free space based on partitions")
 }

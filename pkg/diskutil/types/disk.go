@@ -2,10 +2,12 @@ package types
 
 import (
 	"fmt"
-	"regexp"
+	"strings"
+
+	"github.com/aws/ec2-macos-utils/pkg/diskutil/identifier"
 )
 
-// DiskInfo mirrors the output format of the command "diskutil info -plist <disk>" to store information about a d.
+// DiskInfo mirrors the output format of the command "diskutil info -plist <disk>" to store information about a disk.
 type DiskInfo struct {
 	ContainerInfo
 	AESHardware                                 bool                `plist:"AESHardware"`
@@ -57,8 +59,13 @@ type DiskInfo struct {
 	WritableVolume                              bool                `plist:"WritableVolume"`
 }
 
-// ParentDeviceID gets the parent device identifier for a physical store
-func (d *DiskInfo) ParentDeviceID() (id string, err error) {
+// IsPhysical checks if the disk is physical or virtual.
+func (d *DiskInfo) IsPhysical() bool {
+	return strings.EqualFold(d.VirtualOrPhysical, "Physical")
+}
+
+// ParentDeviceID gets the parent device identifier for a physical store.
+func (d *DiskInfo) ParentDeviceID() (string, error) {
 	// APFS Containers and Volumes are virtualized and should have a physical store which represents a physical disk
 	if d.APFSPhysicalStores == nil {
 		return "", fmt.Errorf("no physical stores found in disk")
@@ -68,16 +75,11 @@ func (d *DiskInfo) ParentDeviceID() (id string, err error) {
 	// is unexpected and the common case shouldn't violate this.
 	//
 	// Note: more than one physical store can indicate a fusion drive - https://support.apple.com/en-us/HT202574.
-	if len(d.APFSPhysicalStores) == 1 {
-		id = d.APFSPhysicalStores[0].DeviceIdentifier
-	} else {
+	if len(d.APFSPhysicalStores) != 1 {
 		return "", fmt.Errorf("expected 1 physical store but got [%d]", len(d.APFSPhysicalStores))
 	}
 
-	// Match the disk ID from the Physical Store's device identifier and remove extra partition information
-	// from it (e.g. "s4s1")
-	diskIDRegex := regexp.MustCompile("disk[0-9]+")
-	id = diskIDRegex.FindString(id)
+	id := identifier.ParseDiskID(d.APFSPhysicalStores[0].DeviceIdentifier)
 	if id == "" {
 		return "", fmt.Errorf("physical store [%s] does not contain the expected expression \"disk[0-9]+\"",
 			d.APFSPhysicalStores[0].DeviceIdentifier)

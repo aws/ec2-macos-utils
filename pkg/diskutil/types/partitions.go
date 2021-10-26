@@ -15,33 +15,28 @@ type SystemPartitions struct {
 }
 
 // AvailableDiskSpace calculates the amount of unallocated disk space for a specific device id.
-func (p *SystemPartitions) AvailableDiskSpace(id string) (size uint64, err error) {
-	var diskPart *DiskPart
-
+func (p *SystemPartitions) AvailableDiskSpace(id string) (uint64, error) {
 	// Loop through all the partitions in the system and attempt to find the struct with a matching ID
+	var target *DiskPart
 	for i, disk := range p.AllDisksAndPartitions {
 		if strings.EqualFold(disk.DeviceIdentifier, id) {
-			diskPart = &p.AllDisksAndPartitions[i]
+			target = &p.AllDisksAndPartitions[i]
 			break
 		}
 	}
 
 	// Ensure a DiskPart struct was found
-	if diskPart == nil {
+	if target == nil {
 		return 0, fmt.Errorf("no partition information found for ID [%s]", id)
 	}
 
-	// diskPart.size is the disk's maximum size so it will be used as a starting point to subtract
-	// the sizes of its individual p.
-	size = diskPart.Size
-
-	// Iterate through all of the disk's partitions and subtract their total size from the disk's maximum size.
-	// At the end of this loop, size will be the amount of remaining free space the disk has.
-	for _, part := range diskPart.Partitions {
-		size -= part.Size
+	// Sum up disk's current allocations.
+	var allocated uint64
+	for _, p := range target.Partitions {
+		allocated += p.Size
 	}
 
-	return size, nil
+	return target.Size - allocated, nil
 }
 
 // APFSPhysicalStoreID represents the physical device usually relating to synthesized virtual devices.

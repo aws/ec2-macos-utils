@@ -89,10 +89,7 @@ func ExecuteCommandYes(c []string, runAsUser string, envVars []string) (output C
 		return CommandOutput{}, fmt.Errorf("error starting /usr/bin/yes command: %w", err)
 	}
 
-	// Execute the given command (c)
-	out, err := ExecuteCommand(c, runAsUser, envVars, stdin)
-
-	return out, err
+	return ExecuteCommand(c, runAsUser, envVars, stdin)
 }
 
 // getUIDandGID takes a username and returns the uid and gid for that user.

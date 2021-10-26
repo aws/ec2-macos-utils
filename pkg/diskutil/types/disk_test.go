@@ -1,6 +1,10 @@
 package types
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestDiskInfo_parentDeviceID(t *testing.T) {
 	type args struct {
@@ -65,12 +69,13 @@ func TestDiskInfo_parentDeviceID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotId, err := tt.args.disk.ParentDeviceID()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParentDeviceID() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if gotId != tt.wantId {
-				t.Errorf("ParentDeviceID() gotId = %v, want %v", gotId, tt.wantId)
+
+			assert.Equal(t, tt.wantId, gotId, "should have matching parent device ID")
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

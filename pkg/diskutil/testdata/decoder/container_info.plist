@@ -5,11 +5,11 @@
     <key>AESHardware</key>
     <false/>
     <key>APFSContainerFree</key>
-    <integer>41477054464</integer>
+    <integer>4000000</integer>
     <key>APFSContainerReference</key>
     <string>disk2</string>
     <key>APFSContainerSize</key>
-    <integer>64214753280</integer>
+    <integer>6000000</integer>
     <key>APFSPhysicalStores</key>
     <array>
         <dict>
