@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
 
 	"github.com/stretchr/testify/assert"
 )

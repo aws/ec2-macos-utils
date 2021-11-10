@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
-	"github.com/aws/ec2-macos-utils/pkg/util"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
+	"github.com/aws/ec2-macos-utils/internal/util"
 )
 
 // updatePhysicalStores provides separate functionality for fetching APFS physical stores for SystemPartitions.

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
 
 	"github.com/dustin/go-humanize"
 	"github.com/sirupsen/logrus"

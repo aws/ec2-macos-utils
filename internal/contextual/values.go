@@ -3,7 +3,7 @@ package contextual
 import (
 	"context"
 
-	"github.com/aws/ec2-macos-utils/pkg/system"
+	"github.com/aws/ec2-macos-utils/internal/system"
 )
 
 // productKey is used to set and retrieve context held values for Product.

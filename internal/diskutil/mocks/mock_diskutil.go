@@ -7,7 +7,7 @@ package mock_diskutil
 import (
 	reflect "reflect"
 
-	types "github.com/aws/ec2-macos-utils/pkg/diskutil/types"
+	types "github.com/aws/ec2-macos-utils/internal/diskutil/types"
 	gomock "github.com/golang/mock/gomock"
 )
 

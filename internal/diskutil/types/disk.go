@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/identifier"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/identifier"
 )
 
 // DiskInfo mirrors the output format of the command "diskutil info -plist <disk>" to store information about a disk.

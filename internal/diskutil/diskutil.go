@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
-	"github.com/aws/ec2-macos-utils/pkg/system"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
+	"github.com/aws/ec2-macos-utils/internal/system"
 
 	"github.com/Masterminds/semver"
 )

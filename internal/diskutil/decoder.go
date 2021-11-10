@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
 
 	"howett.net/plist"
 )

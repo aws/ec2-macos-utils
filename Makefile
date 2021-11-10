@@ -1,7 +1,7 @@
 VERSION=$(shell git describe --always --tags)
 COMMITDATE=$(shell git show -s --format=%ci HEAD)
 MODPATH=github.com/aws/ec2-macos-utils
-T=.
+T=./cmd/ec2-macos-utils
 V=-v
 GO=go
 

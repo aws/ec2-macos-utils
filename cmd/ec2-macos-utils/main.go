@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/aws/ec2-macos-utils/cmd"
+	"github.com/aws/ec2-macos-utils/internal/cmd"
 	"github.com/aws/ec2-macos-utils/internal/contextual"
-	"github.com/aws/ec2-macos-utils/pkg/system"
+	"github.com/aws/ec2-macos-utils/internal/system"
 )
 
-// TODO: this will become cmd/ec2-macos-utils/main.go
-// TODO: see https://code.amazon.com/packages/JakeevShare/trees/heads/go/conceptual/context-data
 func main() {
 	sys, err := system.Scan()
 	if err != nil {

@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aws/ec2-macos-utils/internal/contextual"
-	"github.com/aws/ec2-macos-utils/pkg/diskutil"
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/identifier"
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
+	"github.com/aws/ec2-macos-utils/internal/diskutil"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/identifier"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
 )
 
 // growContainer is a struct for holding all information passed into the grow container command.

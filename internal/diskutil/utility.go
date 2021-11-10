@@ -3,7 +3,7 @@ package diskutil
 import (
 	"fmt"
 
-	"github.com/aws/ec2-macos-utils/pkg/util"
+	"github.com/aws/ec2-macos-utils/internal/util"
 )
 
 // UtilImpl outlines the functionality necessary for wrapping macOS's diskutil tool.

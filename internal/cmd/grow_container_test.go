@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"testing"
 
-	mock_diskutil "github.com/aws/ec2-macos-utils/pkg/diskutil/mocks"
-	"github.com/aws/ec2-macos-utils/pkg/diskutil/types"
+	mock_diskutil "github.com/aws/ec2-macos-utils/internal/diskutil/mocks"
+	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
 
 	"github.com/golang/mock/gomock"
 	"github.com/sirupsen/logrus"
