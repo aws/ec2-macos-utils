@@ -9,8 +9,18 @@ import (
 	"howett.net/plist"
 )
 
-// versionPath is the path on the root filesystem to the SystemVersion plist
-const versionPath = "/System/Library/CoreServices/SystemVersion.plist"
+const (
+	// versionPath is the path on the root filesystem to the SystemVersion plist
+	versionPath = "/System/Library/CoreServices/SystemVersion.plist"
+
+	// dotVersionPath is the path to the symlink that directly references versionPath and bypasses the compatibility
+	// mode that was introduced with macOS 11.0.
+	dotVersionPath = "/System/Library/CoreServices/.SystemVersionPlatform.plist"
+
+	// dotVersionSwitch is the product version number returned by macOS when the system is in compat mode
+	// (SYSTEM_VERSION_COMPAT=1). If this version is returned, dotVersionPath should be read to bypass compat mode.
+	dotVersionSwitch = "10.16"
+)
 
 // System correlates VersionInfo with a Product.
 type System struct {
@@ -72,16 +82,34 @@ func decodeVersionInfo(reader io.ReadSeeker) (version *VersionInfo, err error) {
 	return version, nil
 }
 
-// readVersion opens the versionPath and calls decodeVersionInfo to read and parse the raw plist into a new VersionInfo.
+// readVersion reads the SystemVersion plist data from disk (versionPath). If "SYSTEM_VERSION_COMPAT" is enabled, it will instead
+// read from dotVersionPath to bypass macOS's compat mode.
 func readVersion() (*VersionInfo, error) {
-	// Open the SystemVersion.plist file
-	versionReader, err := os.Open(versionPath)
+	// Read the version info from the standard file path
+	version, err := readProductVersionFile(versionPath)
 	if err != nil {
 		return nil, err
 	}
 
+	// If the returned product version is in compat mode, read the version info from the dot file to bypass compat mode.
+	if version.ProductVersion == dotVersionSwitch {
+		return readProductVersionFile(dotVersionPath)
+	}
+
+	return version, nil
+}
+
+// readProductVersion opens the given file and attempts to decode it as VersionInfo.
+func readProductVersionFile(path string) (*VersionInfo, error) {
+	// Open the SystemVersion.plist file
+	versionFile, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer versionFile.Close()
+
 	// Get the VersionInfo from the reader
-	version, err := decodeVersionInfo(versionReader)
+	version, err := decodeVersionInfo(versionFile)
 	if err != nil {
 		return nil, err
 	}

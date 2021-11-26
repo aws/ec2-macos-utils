@@ -62,12 +62,12 @@ func ExecuteCommand(c []string, runAsUser string, envVars []string, stdin io.Rea
 
 	// Start the command's execution
 	if err = cmd.Start(); err != nil {
-		return CommandOutput{}, fmt.Errorf("error starting specified command: %w", err)
+		return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("error starting specified command: %w", err)
 	}
 
 	// Wait for the command to exit
 	if err = cmd.Wait(); err != nil {
-		return CommandOutput{}, fmt.Errorf("error waiting for specified command to exit: %w", err)
+		return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("error waiting for specified command to exit: %w", err)
 	}
 
 	return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, err

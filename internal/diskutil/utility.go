@@ -2,21 +2,29 @@ package diskutil
 
 import (
 	"fmt"
-
 	"github.com/aws/ec2-macos-utils/internal/util"
 )
 
 // UtilImpl outlines the functionality necessary for wrapping macOS's diskutil tool.
 type UtilImpl interface {
-	List(args []string) (string, error)
-	Info(id string) (string, error)
-	RepairDisk(id string) (string, error)
+	// APFSImpl outlines the functionality necessary for wrapping diskutil's APFS verb.
 	APFSImpl
+	// Info fetches raw disk information for the specified device identifier.
+	Info(id string) (string, error)
+	// List fetches all disk and partition information for the system.
+	// This output will be filtered based on the args provided.
+	List(args []string) (string, error)
+	// RepairDisk attempts to repair the disk for the specified device identifier.
+	// This process requires root access.
+	RepairDisk(id string) (string, error)
 }
 
 // APFSImpl outlines the functionality necessary for wrapping diskutil's APFS verb.
 type APFSImpl interface {
-	ResizeContainer(id, size string) (string, error)
+	// ResizeContainer attempts to grow the APFS container with the given device identifier
+	// to the specified size. If the given size is 0, ResizeContainer will attempt to grow
+	// the disk to its maximum size.
+	ResizeContainer(id string, size string) (string, error)
 }
 
 // DiskUtilityCmd is an empty struct that provides the implementation for the DiskUtility interface.
@@ -79,12 +87,12 @@ func (d *DiskUtilityCmd) RepairDisk(id string) (string, error) {
 }
 
 // ResizeContainer uses the macOS diskutil apfs resizeContainer command to change the size of the specific container ID.
-func (d *DiskUtilityCmd) ResizeContainer(id, size string) (string, error) {
+func (d *DiskUtilityCmd) ResizeContainer(id string, size string) (string, error) {
 	// cmdResizeContainer represents the command used for executing macOS's diskutil to resize a container
 	//   * apfs - specifies that a virtual APFS volume is going to be modified
 	//   * resizeContainer - indicates that a container is going to be resized
 	//   * id - the device identifier for the container
-	//   * size - the size which can be in a human readable format (e.g. "0", "110g", and "1.5t")
+	//   * size - the size which can be in a human-readable format (e.g. "0", "110g", and "1.5t")
 	cmdResizeContainer := []string{"diskutil", "apfs", "resizeContainer", id, size}
 
 	// Execute the diskutil apfs resizeContainer command and store the output

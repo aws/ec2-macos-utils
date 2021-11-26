@@ -1,7 +1,6 @@
 package system
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/Masterminds/semver"
@@ -11,11 +10,12 @@ import (
 type Release uint8
 
 const (
-	Mojave Release = iota + 1
+	Unknown Release = iota
+	Mojave
 	Catalina
 	BigSur
-	MaxRelease
-	Unknown Release = 0
+	Monterey
+	CompatMode
 )
 
 func (r Release) String() string {
@@ -26,6 +26,10 @@ func (r Release) String() string {
 		return "Catalina"
 	case BigSur:
 		return "Big Sur"
+	case Monterey:
+		return "Monterey"
+	case CompatMode:
+		return "Compatability Mode"
 	default:
 		return "unknown"
 	}
@@ -36,8 +40,13 @@ var (
 	mojaveConstraints = mustInitConstraint(semver.NewConstraint("~10.14"))
 	// catalinaConstraints are the constraints used to identify Catalina versions (10.15.x).
 	catalinaConstraints = mustInitConstraint(semver.NewConstraint("~10.15"))
-	// bigSurConstraints are the constraints used to identify BigSur versions (11.x.x or 10.16.x).
-	bigSurConstraints = mustInitConstraint(semver.NewConstraint("~11 || ~10.16"))
+	// bigSurConstraints are the constraints used to identify BigSur versions (11.x.x).
+	bigSurConstraints = mustInitConstraint(semver.NewConstraint("~11"))
+	// montereyConstraints are the constraints used to identify Monterey versions (12.x.x).
+	montereyConstraints = mustInitConstraint(semver.NewConstraint("~12"))
+	// compatModeConstraints are the constraints used to identify macOS Big Sur and later. This version is returned
+	// when the system is in compat mode (SYSTEM_VERSION_COMPAT=1).
+	compatModeConstraints = mustInitConstraint(semver.NewConstraint("~10.16"))
 )
 
 // mustInitConstraint ensures that a semver.Constraints can be initialized and used.
@@ -66,10 +75,7 @@ func newProduct(version string) (*Product, error) {
 		return nil, err
 	}
 
-	release, err := getVersionRelease(*ver)
-	if err != nil {
-		return nil, err
-	}
+	release := getVersionRelease(*ver)
 
 	product := &Product{
 		Release: release,
@@ -80,15 +86,19 @@ func newProduct(version string) (*Product, error) {
 }
 
 // getVersionRelease checks all known release constraints to determine which Release the version belongs to.
-func getVersionRelease(version semver.Version) (Release, error) {
+func getVersionRelease(version semver.Version) Release {
 	switch {
 	case mojaveConstraints.Check(&version):
-		return Mojave, nil
+		return Mojave
 	case catalinaConstraints.Check(&version):
-		return Catalina, nil
+		return Catalina
 	case bigSurConstraints.Check(&version):
-		return BigSur, nil
+		return BigSur
+	case montereyConstraints.Check(&version):
+		return Monterey
+	case compatModeConstraints.Check(&version):
+		return CompatMode
+	default:
+		return Unknown
 	}
-
-	return Unknown, errors.New("unknown system version")
 }
