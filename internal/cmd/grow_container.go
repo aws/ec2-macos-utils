@@ -30,8 +30,6 @@ grow resizes the container to its maximum size using
 'diskutil'. The container to operate on can be specified
 with its identifier (e.g. disk1 or /dev/disk1). The string
 'root' may be provided to resize the OS's root volume.
-
-NOTE: instances must be rebooted after resizing an EBS volume
 		`),
 	}
 
@@ -39,6 +37,10 @@ NOTE: instances must be rebooted after resizing an EBS volume
 	growArgs := growContainer{}
 	cmd.PersistentFlags().StringVar(&growArgs.id, "id", "", `container identifier to be resized or "root"`)
 	cmd.MarkPersistentFlagRequired("id")
+
+	// Set up the command's pre-run to check for root permissions.
+	// This is necessary since diskutil repairDisk requires root permissions to run.
+	cmd.PreRunE = assertRootPrivileges
 
 	// Set up the command's run function
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {

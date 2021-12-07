@@ -2,7 +2,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -74,4 +76,22 @@ func setupLogging(level logrus.Level) {
 	logrus.SetLevel(level)
 
 	logrus.SetFormatter(Formatter)
+}
+
+func hasRootPrivileges() bool {
+	return os.Geteuid() == 0
+}
+
+// assertRootPrivileges checks if the command is running with root permissions.
+// If the command doesn't have root permissions, a help message is logged with
+// an example and an error is returned.
+func assertRootPrivileges(cmd *cobra.Command, args []string) error {
+	logrus.Debug("Checking user permissions...")
+	ok := hasRootPrivileges()
+	if !ok {
+		logrus.Warn("Root privileges required")
+		return errors.New("root privileges required, re-run command with sudo")
+	}
+
+	return nil
 }
