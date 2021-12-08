@@ -5,7 +5,7 @@ T=./cmd/ec2-macos-utils
 V=-v
 GO=go
 
-GOIMPORTS = goimports -local "$(T)"
+GOIMPORTS=golang.org/x/tools/cmd/goimports
 
 export GOOS=darwin
 export GOARCH=amd64
@@ -21,8 +21,17 @@ build: CGO_ENABLED=0
 build:
 	$(GO) build $(V) -trimpath -ldflags=$(go_ldflags) $(GO_BUILD_FLAGS) $(T)
 
+clean: GO_CLEAN_FLAGS=-x
 clean:
-	go clean
+	$(GO) clean $(GO_CLEAN_FLAGS)
+	rm -f ec2-macos-utils
+	rm -f ec2-macos-utils-docs
+
+.PHONY: docs
+docs: GO_BUILD_FLAGS=-tags docs
+docs: T=./cmd/ec2-macos-utils-docs
+docs:
+	$(GO) build $(V) $(GO_BUILD_FLAGS) $(T)
 
 GO_TEST_FLAGS=-cover
 
@@ -31,7 +40,7 @@ test:
 	$(GO) test $(V) $(GO_TEST_FLAGS) $(T)
 
 imports::
-	$(GOIMPORTS) -w .
+	$(GO) run $(GOIMPORTS) -local "$(T)" -w .
 
 imports-check::
-	$(GOIMPORTS) -l .
+	$(GO) run $(GOIMPORTS) -local "$(T)" -l .

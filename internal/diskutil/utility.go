@@ -2,6 +2,7 @@ package diskutil
 
 import (
 	"fmt"
+
 	"github.com/aws/ec2-macos-utils/internal/util"
 )
 
