@@ -5,7 +5,8 @@ import (
 	"github.com/aws/ec2-macos-utils/internal/util"
 )
 
-// UtilImpl outlines the functionality necessary for wrapping macOS's diskutil tool.
+// UtilImpl outlines the functionality necessary for wrapping macOS's diskutil tool. The methods are intentionally
+// named to correspond to diskutil(8)'s subcommand names as its API.
 type UtilImpl interface {
 	// APFSImpl outlines the functionality necessary for wrapping diskutil's APFS verb.
 	APFSImpl

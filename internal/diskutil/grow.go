@@ -69,8 +69,13 @@ func GrowContainer(u DiskUtil, container *types.DiskInfo) error {
 	}).Info("Resizing container to maximum size...")
 	out, err := u.ResizeContainer(phy.DeviceIdentifier, "0")
 	logrus.WithField("out", out).Debug("Resize output")
+	if errors.Is(err, ErrReadOnly) {
+		logrus.WithError(err).Warn("Would have resized container to max size")
+	} else if err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
 
 // canAPFSResize does some basic checking on a types.DiskInfo to see if it matches the criteria necessary for
@@ -118,10 +123,12 @@ func repairParentDisk(utility DiskUtil, disk *types.DiskInfo) (message string, e
 	}
 
 	// Attempt to repair the container's parent disk
-	logrus.WithField("parent_id", parentDiskID).Info("Found parent disk ID")
+	logrus.WithField("parent_id", parentDiskID).Info("Repairing parent disk...")
 	out, err := utility.RepairDisk(parentDiskID)
 	logrus.WithField("out", out).Debug("RepairDisk output")
-	if err != nil {
+	if errors.Is(err, ErrReadOnly) {
+		logrus.WithError(err).Warn("Would have repaired parent disk")
+	} else if err != nil {
 		return out, err
 	}
 

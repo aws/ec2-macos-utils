@@ -17,7 +17,8 @@ import (
 
 // growContainer is a struct for holding all information passed into the grow container command.
 type growContainer struct {
-	id string
+	dryrun bool
+	id     string
 }
 
 // growContainerCommand creates a new command which grows APFS containers to their maximum size.
@@ -36,6 +37,7 @@ with its identifier (e.g. disk1 or /dev/disk1). The string
 	// Set up the flags to be passed into the command
 	growArgs := growContainer{}
 	cmd.PersistentFlags().StringVar(&growArgs.id, "id", "", `container identifier to be resized or "root"`)
+	cmd.PersistentFlags().BoolVar(&growArgs.dryrun, "dry-run", false, "run command without mutating changes")
 	cmd.MarkPersistentFlagRequired("id")
 
 	// Set up the command's pre-run to check for root permissions.
@@ -54,6 +56,10 @@ with its identifier (e.g. disk1 or /dev/disk1). The string
 		d, err := diskutil.ForProduct(product)
 		if err != nil {
 			return err
+		}
+
+		if growArgs.dryrun {
+			d = diskutil.Dryrun(d)
 		}
 
 		logrus.WithField("args", growArgs).Debug("Running grow command with args")

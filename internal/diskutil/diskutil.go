@@ -20,6 +20,9 @@ const (
 	minimumGrowFreeSpace = 1000000
 )
 
+// ErrReadOnly identifies errors due to dry-run not being able to continue without mutating changes.
+var ErrReadOnly = errors.New("read-only mode")
+
 // FreeSpaceError defines an error to distinguish when there's not enough space to grow the specified container.
 type FreeSpaceError struct {
 	freeSpaceBytes uint64
@@ -51,6 +54,37 @@ type APFS interface {
 	ResizeContainer(id string, size string) (string, error)
 }
 
+// readonlyWrapper provides a typed implementation for DiskUtil that substitutes mutating
+// methods with dryrun alternatives.
+type readonlyWrapper struct {
+	// impl is the DiskUtil implementation that should have mutating methods substituted for dryrun methods.
+	impl DiskUtil
+}
+
+func (r readonlyWrapper) ResizeContainer(id string, size string) (string, error) {
+	return "", fmt.Errorf("skip resize container: %w", ErrReadOnly)
+}
+
+func (r readonlyWrapper) Info(id string) (*types.DiskInfo, error) {
+	return r.impl.Info(id)
+}
+
+func (r readonlyWrapper) List(args []string) (*types.SystemPartitions, error) {
+	return r.impl.List(args)
+}
+
+func (r readonlyWrapper) RepairDisk(id string) (string, error) {
+	return "", fmt.Errorf("skip repair disk: %w", ErrReadOnly)
+}
+
+// Type assertion to ensure readonlyWrapper implements the DiskUtil interface.
+var _ DiskUtil = (*readonlyWrapper)(nil)
+
+// Dryrun takes a DiskUtil implementation and wraps the mutating methods with dryrun alternatives.
+func Dryrun(impl DiskUtil) *readonlyWrapper {
+	return &readonlyWrapper{impl}
+}
+
 // ForProduct creates a new diskutil controller for the given product.
 func ForProduct(p *system.Product) (DiskUtil, error) {
 	switch p.Release {
@@ -68,8 +102,8 @@ func ForProduct(p *system.Product) (DiskUtil, error) {
 }
 
 // newMojave configures the DiskUtil for the specified Mojave version.
-func newMojave(version semver.Version) (*DiskUtilityMojave, error) {
-	du := &DiskUtilityMojave{
+func newMojave(version semver.Version) (*diskutilMojave, error) {
+	du := &diskutilMojave{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
 	}
@@ -78,8 +112,8 @@ func newMojave(version semver.Version) (*DiskUtilityMojave, error) {
 }
 
 // newCatalina configures the DiskUtil for the specified Catalina version.
-func newCatalina(version semver.Version) (*DiskUtilityCatalina, error) {
-	du := &DiskUtilityCatalina{
+func newCatalina(version semver.Version) (*diskutilCatalina, error) {
+	du := &diskutilCatalina{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
 	}
@@ -88,8 +122,8 @@ func newCatalina(version semver.Version) (*DiskUtilityCatalina, error) {
 }
 
 // newBigSur configures the DiskUtil for the specified Big Sur version.
-func newBigSur(version semver.Version) (*DiskUtilityBigSur, error) {
-	du := &DiskUtilityBigSur{
+func newBigSur(version semver.Version) (*diskutilBigSur, error) {
+	du := &diskutilBigSur{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
 	}
@@ -98,8 +132,8 @@ func newBigSur(version semver.Version) (*DiskUtilityBigSur, error) {
 }
 
 // newMonterey configures the DiskUtil for the specified Monterey version.
-func newMonterey(version semver.Version) (*DiskUtilityBigSur, error) {
-	du := &DiskUtilityBigSur{
+func newMonterey(version semver.Version) (*diskutilMonterey, error) {
+	du := &diskutilMonterey{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
 	}
@@ -112,10 +146,10 @@ type embeddedDiskutil interface {
 	UtilImpl
 }
 
-// DiskUtilityMojave wraps all the functionality necessary for interacting with macOS's diskutil on Mojave. The
+// diskutilMojave wraps all the functionality necessary for interacting with macOS's diskutil on Mojave. The
 // major difference is that the raw plist data emitted by macOS's diskutil CLI doesn't include the physical store data.
 // This requires a separate fetch to find the specific physical store information for the disk(s).
-type DiskUtilityMojave struct {
+type diskutilMojave struct {
 	// embeddedDiskutil provides the diskutil implementation to prevent manual wiring between UtilImpl and DiskUtil.
 	embeddedDiskutil
 
@@ -129,7 +163,7 @@ type DiskUtilityMojave struct {
 //
 // It is possible for List to fail when updating the physical stores, but it will still return the original data
 // that was decoded into the SystemPartitions struct.
-func (d *DiskUtilityMojave) List(args []string) (*types.SystemPartitions, error) {
+func (d *diskutilMojave) List(args []string) (*types.SystemPartitions, error) {
 	partitions, err := list(d.embeddedDiskutil, d.dec, args)
 	if err != nil {
 		return nil, err
@@ -149,7 +183,7 @@ func (d *DiskUtilityMojave) List(args []string) (*types.SystemPartitions, error)
 //
 // It is possible for Info to fail when updating the physical stores, but it will still return the original data
 // that was decoded into the DiskInfo struct.
-func (d *DiskUtilityMojave) Info(id string) (*types.DiskInfo, error) {
+func (d *diskutilMojave) Info(id string) (*types.DiskInfo, error) {
 	disk, err := info(d.embeddedDiskutil, d.dec, id)
 	if err != nil {
 		return nil, err
@@ -163,8 +197,8 @@ func (d *DiskUtilityMojave) Info(id string) (*types.DiskInfo, error) {
 	return disk, nil
 }
 
-// DiskUtilityCatalina wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
-type DiskUtilityCatalina struct {
+// diskutilCatalina wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
+type diskutilCatalina struct {
 	// embeddedDiskutil provides the diskutil implementation to prevent manual wiring between UtilImpl and DiskUtil.
 	embeddedDiskutil
 
@@ -174,18 +208,18 @@ type DiskUtilityCatalina struct {
 
 // List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
-func (d *DiskUtilityCatalina) List(args []string) (*types.SystemPartitions, error) {
+func (d *diskutilCatalina) List(args []string) (*types.SystemPartitions, error) {
 	return list(d.embeddedDiskutil, d.dec, args)
 }
 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
-func (d *DiskUtilityCatalina) Info(id string) (*types.DiskInfo, error) {
+func (d *diskutilCatalina) Info(id string) (*types.DiskInfo, error) {
 	return info(d.embeddedDiskutil, d.dec, id)
 }
 
-// DiskUtilityBigSur wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
-type DiskUtilityBigSur struct {
+// diskutilBigSur wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
+type diskutilBigSur struct {
 	// embeddedDiskutil provides the diskutil implementation to prevent manual wiring between UtilImpl and DiskUtil.
 	embeddedDiskutil
 
@@ -195,18 +229,18 @@ type DiskUtilityBigSur struct {
 
 // List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
-func (d *DiskUtilityBigSur) List(args []string) (*types.SystemPartitions, error) {
+func (d *diskutilBigSur) List(args []string) (*types.SystemPartitions, error) {
 	return list(d.embeddedDiskutil, d.dec, args)
 }
 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
-func (d *DiskUtilityBigSur) Info(id string) (*types.DiskInfo, error) {
+func (d *diskutilBigSur) Info(id string) (*types.DiskInfo, error) {
 	return info(d.embeddedDiskutil, d.dec, id)
 }
 
-// DiskUtilityMonterey wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
-type DiskUtilityMonterey struct {
+// diskutilMonterey wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
+type diskutilMonterey struct {
 	// embeddedDiskutil provides the diskutil implementation to prevent manual wiring between UtilImpl and DiskUtil.
 	embeddedDiskutil
 
@@ -216,13 +250,13 @@ type DiskUtilityMonterey struct {
 
 // List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
-func (d *DiskUtilityMonterey) List(args []string) (*types.SystemPartitions, error) {
+func (d *diskutilMonterey) List(args []string) (*types.SystemPartitions, error) {
 	return list(d.embeddedDiskutil, d.dec, args)
 }
 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
-func (d *DiskUtilityMonterey) Info(id string) (*types.DiskInfo, error) {
+func (d *diskutilMonterey) Info(id string) (*types.DiskInfo, error) {
 	return info(d.embeddedDiskutil, d.dec, id)
 }
 
