@@ -41,8 +41,9 @@ This command provides utilities for common tasks on EC2 macOS instances to simpl
 This includes disk manipulation and system configuration helpers. Tasks are reached through subcommands, each with 
 help text and usages that accompany them.
 `),
-		Version:      build.Version,
-		SilenceUsage: true,
+		Version:           build.Version,
+		SilenceUsage:      true,
+		DisableAutoGenTag: true,
 	}
 
 	versionTemplate := "{{.Name}} {{.Version}} [%s]\n\n%s\n"
