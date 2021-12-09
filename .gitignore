@@ -1,5 +1,8 @@
 /build
-gen
 /bin
-go.mod
-go.sum
+.DS_Store
+*.log
+tmp
+.\#*
+*~
+.vscode*
