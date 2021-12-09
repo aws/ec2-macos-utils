@@ -1,10 +1,9 @@
-// +build docs
-
 package main
 
 import (
 	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra/doc"
 
 	"github.com/aws/ec2-macos-utils/internal/cmd"
@@ -17,9 +16,15 @@ func main() {
 		outdir = args[1]
 	}
 
-	os.MkdirAll(outdir, 0755)
+	logrus.WithField("outdir", outdir).Info("generating docs")
+
+	if err := os.MkdirAll(outdir, 0755); err != nil {
+		panic(err)
+	}
 	err := doc.GenMarkdownTree(cmd.MainCommand(), outdir)
 	if err != nil {
-		os.Exit(1)
+		panic(err)
 	}
+
+	logrus.WithField("outdir", outdir).Info("generated docs")
 }
