@@ -81,20 +81,24 @@ func GrowContainer(u DiskUtil, container *types.DiskInfo) error {
 // canAPFSResize does some basic checking on a types.DiskInfo to see if it matches the criteria necessary for
 // APFS.ResizeContainer to succeed. It checks that the types.ContainerInfo is not empty and that the
 // types.ContainerInfo's FilesystemType is "apfs".
-func canAPFSResize(container *types.DiskInfo) error {
-	if container == nil {
+func canAPFSResize(disk *types.DiskInfo) error {
+	if disk == nil {
 		return errors.New("no disk information")
 	}
 
-	if (container.ContainerInfo == types.ContainerInfo{}) {
-		return errors.New("no container information")
+	// If the disk has ContainerInfo, check the FilesystemType
+	if (disk.ContainerInfo != types.ContainerInfo{}) {
+		if disk.ContainerInfo.FilesystemType == "apfs" {
+			return nil
+		}
 	}
 
-	if container.FilesystemType != "apfs" {
-		return errors.New("disk is not apfs")
+	// Check if the disk has an APFS Container reference and APFS Physical Stores
+	if disk.APFSContainerReference != "" && len(disk.APFSPhysicalStores) > 0 {
+		return nil
 	}
 
-	return nil
+	return errors.New("disk is not apfs")
 }
 
 // getDiskFreeSpace calculates the amount of free space a disk has available by summing the sizes of each partition

@@ -8,7 +8,7 @@ This is done by wrapping `diskutil(8)`, gathering disk information, and resizing
 
 ## Usage
 
-The utility is installed by default for all AMIs vended by AWS.
+The utility will be installed by default for all AMIs vended by AWS after December 8, 2021.
 `ec2-macos-utils` is also available as a cask for install and updates via  [AWS' Homebrew tap](https://github.com/aws/homebrew-aws).
 
 See the [ec2-macos-utils docs](docs/ec2-macos-utils.md) for more information.
@@ -27,6 +27,7 @@ ec2-macos-utils grow [flags]
 
 The `grow` command resizes an APFS container to its maximum size.
 This is done by fetching all disk and system partition information, repairing the physical device to update partition information, calculating the amount of free space available, and resizing the container to its max size.
+Repairing the physical device is necessary in order to properly allocate the amount of available free space.
 
 The `grow` command should be run with `sudo` as it requires root access in order to repair the physical disk.
 

@@ -292,7 +292,7 @@ func TestCanAPFSResize(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "WithoutAPFSContainer",
+			name: "WithoutAPFSFilesystem",
 			args: args{
 				container: &types.DiskInfo{
 					ContainerInfo: types.ContainerInfo{
@@ -303,11 +303,39 @@ func TestCanAPFSResize(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "Success",
+			name: "WithoutAPFSReference",
+			args: args{
+				container: &types.DiskInfo{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "WithoutAPFSPhysicalStores",
+			args: args{
+				container: &types.DiskInfo{
+					APFSContainerReference: "disk1",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "SuccessAPFSFilesystem",
 			args: args{
 				container: &types.DiskInfo{
 					ContainerInfo: types.ContainerInfo{
 						FilesystemType: "apfs",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "SuccessAPFSContainer",
+			args: args{
+				container: &types.DiskInfo{
+					APFSContainerReference: "disk1",
+					APFSPhysicalStores: []types.APFSPhysicalStore{
+						{DeviceIdentifier: "disk0"},
 					},
 				},
 			},
