@@ -96,6 +96,8 @@ func ForProduct(p *system.Product) (DiskUtil, error) {
 		return newBigSur(p.Version)
 	case system.Monterey:
 		return newMonterey(p.Version)
+	case system.Ventura:
+		return newVentura(p.Version)
 	default:
 		return nil, errors.New("unknown release")
 	}
@@ -133,6 +135,16 @@ func newBigSur(version semver.Version) (*diskutilBigSur, error) {
 
 // newMonterey configures the DiskUtil for the specified Monterey version.
 func newMonterey(version semver.Version) (*diskutilMonterey, error) {
+	du := &diskutilMonterey{
+		embeddedDiskutil: &DiskUtilityCmd{},
+		dec:              &PlistDecoder{},
+	}
+
+	return du, nil
+}
+
+// newVentura configures the DiskUtil for the specified Ventura version.
+func newVentura(version semver.Version) (*diskutilMonterey, error) {
 	du := &diskutilMonterey{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
@@ -257,6 +269,27 @@ func (d *diskutilMonterey) List(args []string) (*types.SystemPartitions, error) 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
 func (d *diskutilMonterey) Info(id string) (*types.DiskInfo, error) {
+	return info(d.embeddedDiskutil, d.dec, id)
+}
+
+// diskutilVentura wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
+type diskutilVentura struct {
+	// embeddedDiskutil provides the diskutil implementation to prevent manual wiring between UtilImpl and DiskUtil.
+	embeddedDiskutil
+
+	// dec is the Decoder used to decode the raw output from UtilImpl into usable structs.
+	dec Decoder
+}
+
+// List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
+// output in a SystemPartitions struct.
+func (d *diskutilVentura) List(args []string) (*types.SystemPartitions, error) {
+	return list(d.embeddedDiskutil, d.dec, args)
+}
+
+// Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
+// output in a DiskInfo struct.
+func (d *diskutilVentura) Info(id string) (*types.DiskInfo, error) {
 	return info(d.embeddedDiskutil, d.dec, id)
 }
 
