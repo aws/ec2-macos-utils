@@ -59,6 +59,57 @@ func TestRun_WithoutDiskInfo(t *testing.T) {
 	assert.Error(t, err, "should fail to grow the container since the DiskInfo isn't populated")
 }
 
+func TestRun_WithoutFreeSpace(t *testing.T) {
+	const (
+		testDiskID        = "disk1"
+		diskSize   uint64 = 3_000_000
+		partSize   uint64 = 1_500_000
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	parts := types.SystemPartitions{
+		AllDisks: []string{testDiskID},
+		AllDisksAndPartitions: []types.DiskPart{
+			{
+				DeviceIdentifier: testDiskID,
+				Size:             diskSize,
+				Partitions: []types.Partition{
+					{Size: partSize},
+					{Size: partSize},
+				},
+			},
+		},
+	}
+
+	disk := types.DiskInfo{
+		APFSPhysicalStores: []types.APFSPhysicalStore{
+			{DeviceIdentifier: testDiskID},
+		},
+		ContainerInfo: types.ContainerInfo{
+			FilesystemType: "apfs",
+		},
+		DeviceIdentifier:  testDiskID,
+		ParentWholeDisk:   testDiskID,
+		VirtualOrPhysical: "Physical",
+	}
+
+	mock := mock_diskutil.NewMockDiskUtil(ctrl)
+	gomock.InOrder(
+		mock.EXPECT().List(nil).Return(&parts, nil),
+		mock.EXPECT().Info(testDiskID).Return(&disk, nil),
+		mock.EXPECT().RepairDisk(testDiskID).Return("", nil),
+		mock.EXPECT().List(nil).Return(&parts, nil),
+	)
+
+	err := run(mock, growContainer{
+		id: testDiskID,
+	})
+
+	assert.NoError(t, err, "should exit quietly if there isn't enough free space to grow")
+}
+
 func TestRun_WithUpdatedInfoErr(t *testing.T) {
 	const (
 		testDiskID        = "disk1"

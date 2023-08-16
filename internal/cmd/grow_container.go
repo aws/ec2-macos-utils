@@ -82,6 +82,12 @@ func run(utility diskutil.DiskUtil, args growContainer) error {
 
 	logrus.WithField("device_id", di.DeviceIdentifier).Info("Attempting to grow container...")
 	if err := diskutil.GrowContainer(utility, di); err != nil {
+		// Don't treat FreeSpaceErrors as fatal, instead exit quietly since there's nothing else to do.
+		if errors.As(err, &diskutil.FreeSpaceError{}) {
+			logrus.WithField("id", args.id).Info("Nothing to do without free space, stopping command")
+			return nil
+		}
+
 		return err
 	}
 
