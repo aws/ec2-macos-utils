@@ -66,6 +66,10 @@ docs/%.md: GOARCH=
 docs/%.md: $(GOFILES)
 	$(GO) run $(MODPATH)/internal/cmd/gen-docs $(@D)
 
+.PHONY: generate
+generate::
+	go generate $(V) ./...
+
 .PHONY: test
 test:
 	$(GO) test $(V) $(GO_TEST_FLAGS) $(T)
