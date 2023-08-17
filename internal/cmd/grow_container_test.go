@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"testing"
@@ -22,14 +23,15 @@ func TestRun_WithInfoErr(t *testing.T) {
 		testDiskID    = "root"
 		testDiskAlias = "/"
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
-	mock.EXPECT().Info(testDiskAlias).Return(nil, fmt.Errorf("error"))
+	mock.EXPECT().Info(ctx, testDiskAlias).Return(nil, fmt.Errorf("error"))
 
-	err := run(mock, growContainer{
+	err := run(ctx, mock, growContainer{
 		id: testDiskID,
 	})
 
@@ -41,6 +43,7 @@ func TestRun_WithoutDiskInfo(t *testing.T) {
 		testDiskID    = "root"
 		testDiskAlias = "/"
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -50,9 +53,9 @@ func TestRun_WithoutDiskInfo(t *testing.T) {
 	}
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
-	mock.EXPECT().Info(testDiskAlias).Return(&disk, nil)
+	mock.EXPECT().Info(ctx, testDiskAlias).Return(&disk, nil)
 
-	err := run(mock, growContainer{
+	err := run(ctx, mock, growContainer{
 		id: testDiskID,
 	})
 
@@ -65,6 +68,7 @@ func TestRun_WithoutFreeSpace(t *testing.T) {
 		diskSize   uint64 = 3_000_000
 		partSize   uint64 = 1_500_000
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -97,13 +101,13 @@ func TestRun_WithoutFreeSpace(t *testing.T) {
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().Info(testDiskID).Return(&disk, nil),
-		mock.EXPECT().RepairDisk(testDiskID).Return("", nil),
-		mock.EXPECT().List(nil).Return(&parts, nil),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().Info(ctx, testDiskID).Return(&disk, nil),
+		mock.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
 	)
 
-	err := run(mock, growContainer{
+	err := run(ctx, mock, growContainer{
 		id: testDiskID,
 	})
 
@@ -116,6 +120,7 @@ func TestRun_WithUpdatedInfoErr(t *testing.T) {
 		diskSize   uint64 = 3_000_000
 		partSize   uint64 = 500_000
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -148,15 +153,15 @@ func TestRun_WithUpdatedInfoErr(t *testing.T) {
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().Info(testDiskID).Return(&disk, nil),
-		mock.EXPECT().RepairDisk(testDiskID).Return("", nil),
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().ResizeContainer(testDiskID, "0").Return("", nil),
-		mock.EXPECT().List(nil).Return(nil, fmt.Errorf("error")),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().Info(ctx, testDiskID).Return(&disk, nil),
+		mock.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().ResizeContainer(ctx, testDiskID, "0").Return("", nil),
+		mock.EXPECT().List(ctx, nil).Return(nil, fmt.Errorf("error")),
 	)
 
-	err := run(mock, growContainer{
+	err := run(ctx, mock, growContainer{
 		id: testDiskID,
 	})
 
@@ -169,6 +174,7 @@ func TestRun_Success(t *testing.T) {
 		diskSize   uint64 = 3_000_000
 		partSize   uint64 = 500_000
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -202,16 +208,16 @@ func TestRun_Success(t *testing.T) {
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().Info(testDiskID).Return(&disk, nil),
-		mock.EXPECT().RepairDisk(testDiskID).Return("", nil),
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().ResizeContainer(testDiskID, "0").Return("", nil),
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().Info(testDiskID).Return(&disk, nil),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().Info(ctx, testDiskID).Return(&disk, nil),
+		mock.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().ResizeContainer(ctx, testDiskID, "0").Return("", nil),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().Info(ctx, testDiskID).Return(&disk, nil),
 	)
 
-	err := run(mock, growContainer{
+	err := run(ctx, mock, growContainer{
 		id: testDiskID,
 	})
 
@@ -220,14 +226,15 @@ func TestRun_Success(t *testing.T) {
 
 func TestGetTargetDiskInfo_WithRootInfoErr(t *testing.T) {
 	const testDiskID = "root"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
-	mock.EXPECT().Info("/").Return(nil, fmt.Errorf("error"))
+	mock.EXPECT().Info(ctx, "/").Return(nil, fmt.Errorf("error"))
 
-	di, err := getTargetDiskInfo(mock, testDiskID)
+	di, err := getTargetDiskInfo(ctx, mock, testDiskID)
 
 	assert.Error(t, err, `should fail to get DiskInfo for /`)
 	assert.Nil(t, di)
@@ -235,14 +242,15 @@ func TestGetTargetDiskInfo_WithRootInfoErr(t *testing.T) {
 
 func TestGetTargetDiskInfo_WithListErr(t *testing.T) {
 	const testDiskID = "disk1"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
-	mock.EXPECT().List(nil).Return(nil, fmt.Errorf("error"))
+	mock.EXPECT().List(ctx, nil).Return(nil, fmt.Errorf("error"))
 
-	di, err := getTargetDiskInfo(mock, testDiskID)
+	di, err := getTargetDiskInfo(ctx, mock, testDiskID)
 
 	assert.Error(t, err, "should fail to get partition information")
 	assert.Nil(t, di)
@@ -253,6 +261,7 @@ func TestGetTargetDiskInfo_NoTargetDisk(t *testing.T) {
 		testDiskID     = "disk1"
 		testAllDisksID = "disk0"
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -262,9 +271,9 @@ func TestGetTargetDiskInfo_NoTargetDisk(t *testing.T) {
 	}
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
-	mock.EXPECT().List(nil).Return(&parts, nil)
+	mock.EXPECT().List(ctx, nil).Return(&parts, nil)
 
-	di, err := getTargetDiskInfo(mock, testDiskID)
+	di, err := getTargetDiskInfo(ctx, mock, testDiskID)
 
 	assert.Error(t, err, "should fail to find targetDiskID in partition information")
 	assert.Nil(t, di, "should get nil data for invalid target disk")
@@ -272,6 +281,7 @@ func TestGetTargetDiskInfo_NoTargetDisk(t *testing.T) {
 
 func TestGetTargetDiskInfo_WithInfoErr(t *testing.T) {
 	const testDiskID = "disk1"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -282,11 +292,11 @@ func TestGetTargetDiskInfo_WithInfoErr(t *testing.T) {
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().Info(testDiskID).Return(nil, fmt.Errorf("error")),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().Info(ctx, testDiskID).Return(nil, fmt.Errorf("error")),
 	)
 
-	di, err := getTargetDiskInfo(mock, testDiskID)
+	di, err := getTargetDiskInfo(ctx, mock, testDiskID)
 
 	assert.Error(t, err, "should fail to get disk information")
 	assert.Nil(t, di, "should get nil data with info error")
@@ -294,6 +304,7 @@ func TestGetTargetDiskInfo_WithInfoErr(t *testing.T) {
 
 func TestGetTargetDiskInfo_Success(t *testing.T) {
 	const testDiskID = "disk1"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -306,11 +317,11 @@ func TestGetTargetDiskInfo_Success(t *testing.T) {
 
 	mock := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mock.EXPECT().List(nil).Return(&parts, nil),
-		mock.EXPECT().Info(testDiskID).Return(expectedDisk, nil),
+		mock.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mock.EXPECT().Info(ctx, testDiskID).Return(expectedDisk, nil),
 	)
 
-	actualDisk, err := getTargetDiskInfo(mock, testDiskID)
+	actualDisk, err := getTargetDiskInfo(ctx, mock, testDiskID)
 
 	assert.NoError(t, err, "should be able succeeded with valid info")
 	assert.Equal(t, expectedDisk, actualDisk, "should be able to get expected data from info")
