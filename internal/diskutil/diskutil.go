@@ -1,9 +1,10 @@
 // Package diskutil provides the functionality necessary for interacting with macOS's diskutil CLI.
 package diskutil
 
-//go:generate mockgen -source=diskutil.go -destination=mocks/mock_diskutil.go
+//go:generate mockgen -destination mocks/mock_diskutil.go github.com/aws/ec2-macos-utils/internal/diskutil DiskUtil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -37,13 +38,13 @@ type DiskUtil interface {
 	// APFS outlines the functionality necessary for wrapping diskutil's "apfs" verb.
 	APFS
 	// Info fetches raw disk information for the specified device identifier.
-	Info(id string) (*types.DiskInfo, error)
+	Info(ctx context.Context, id string) (*types.DiskInfo, error)
 	// List fetches all disk and partition information for the system.
 	// This output will be filtered based on the args provided.
-	List(args []string) (*types.SystemPartitions, error)
+	List(ctx context.Context, args []string) (*types.SystemPartitions, error)
 	// RepairDisk attempts to repair the disk for the specified device identifier.
 	// This process requires root access.
-	RepairDisk(id string) (string, error)
+	RepairDisk(ctx context.Context, id string) (string, error)
 }
 
 // APFS outlines the functionality necessary for wrapping diskutil's "apfs" verb.
@@ -51,7 +52,7 @@ type APFS interface {
 	// ResizeContainer attempts to grow the APFS container with the given device identifier
 	// to the specified size. If the given size is 0, ResizeContainer will attempt to grow
 	// the disk to its maximum size.
-	ResizeContainer(id string, size string) (string, error)
+	ResizeContainer(ctx context.Context, id string, size string) (string, error)
 }
 
 // readonlyWrapper provides a typed implementation for DiskUtil that substitutes mutating
@@ -61,19 +62,19 @@ type readonlyWrapper struct {
 	impl DiskUtil
 }
 
-func (r readonlyWrapper) ResizeContainer(id string, size string) (string, error) {
+func (r readonlyWrapper) ResizeContainer(ctx context.Context, id string, size string) (string, error) {
 	return "", fmt.Errorf("skip resize container: %w", ErrReadOnly)
 }
 
-func (r readonlyWrapper) Info(id string) (*types.DiskInfo, error) {
-	return r.impl.Info(id)
+func (r readonlyWrapper) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
+	return r.impl.Info(ctx, id)
 }
 
-func (r readonlyWrapper) List(args []string) (*types.SystemPartitions, error) {
-	return r.impl.List(args)
+func (r readonlyWrapper) List(ctx context.Context, args []string) (*types.SystemPartitions, error) {
+	return r.impl.List(ctx, args)
 }
 
-func (r readonlyWrapper) RepairDisk(id string) (string, error) {
+func (r readonlyWrapper) RepairDisk(ctx context.Context, id string) (string, error) {
 	return "", fmt.Errorf("skip repair disk: %w", ErrReadOnly)
 }
 
@@ -175,13 +176,13 @@ type diskutilMojave struct {
 //
 // It is possible for List to fail when updating the physical stores, but it will still return the original data
 // that was decoded into the SystemPartitions struct.
-func (d *diskutilMojave) List(args []string) (*types.SystemPartitions, error) {
-	partitions, err := list(d.embeddedDiskutil, d.dec, args)
+func (d *diskutilMojave) List(ctx context.Context, args []string) (*types.SystemPartitions, error) {
+	partitions, err := list(ctx, d.embeddedDiskutil, d.dec, args)
 	if err != nil {
 		return nil, err
 	}
 
-	err = updatePhysicalStores(partitions)
+	err = updatePhysicalStores(ctx, partitions)
 	if err != nil {
 		return partitions, err
 	}
@@ -195,13 +196,13 @@ func (d *diskutilMojave) List(args []string) (*types.SystemPartitions, error) {
 //
 // It is possible for Info to fail when updating the physical stores, but it will still return the original data
 // that was decoded into the DiskInfo struct.
-func (d *diskutilMojave) Info(id string) (*types.DiskInfo, error) {
-	disk, err := info(d.embeddedDiskutil, d.dec, id)
+func (d *diskutilMojave) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
+	disk, err := info(ctx, d.embeddedDiskutil, d.dec, id)
 	if err != nil {
 		return nil, err
 	}
 
-	err = updatePhysicalStore(disk)
+	err = updatePhysicalStore(ctx, disk)
 	if err != nil {
 		return disk, err
 	}
@@ -220,14 +221,14 @@ type diskutilCatalina struct {
 
 // List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
-func (d *diskutilCatalina) List(args []string) (*types.SystemPartitions, error) {
-	return list(d.embeddedDiskutil, d.dec, args)
+func (d *diskutilCatalina) List(ctx context.Context, args []string) (*types.SystemPartitions, error) {
+	return list(ctx, d.embeddedDiskutil, d.dec, args)
 }
 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
-func (d *diskutilCatalina) Info(id string) (*types.DiskInfo, error) {
-	return info(d.embeddedDiskutil, d.dec, id)
+func (d *diskutilCatalina) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
+	return info(ctx, d.embeddedDiskutil, d.dec, id)
 }
 
 // diskutilBigSur wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
@@ -241,14 +242,14 @@ type diskutilBigSur struct {
 
 // List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
-func (d *diskutilBigSur) List(args []string) (*types.SystemPartitions, error) {
-	return list(d.embeddedDiskutil, d.dec, args)
+func (d *diskutilBigSur) List(ctx context.Context, args []string) (*types.SystemPartitions, error) {
+	return list(ctx, d.embeddedDiskutil, d.dec, args)
 }
 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
-func (d *diskutilBigSur) Info(id string) (*types.DiskInfo, error) {
-	return info(d.embeddedDiskutil, d.dec, id)
+func (d *diskutilBigSur) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
+	return info(ctx, d.embeddedDiskutil, d.dec, id)
 }
 
 // diskutilMonterey wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
@@ -262,14 +263,14 @@ type diskutilMonterey struct {
 
 // List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
-func (d *diskutilMonterey) List(args []string) (*types.SystemPartitions, error) {
-	return list(d.embeddedDiskutil, d.dec, args)
+func (d *diskutilMonterey) List(ctx context.Context, args []string) (*types.SystemPartitions, error) {
+	return list(ctx, d.embeddedDiskutil, d.dec, args)
 }
 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
-func (d *diskutilMonterey) Info(id string) (*types.DiskInfo, error) {
-	return info(d.embeddedDiskutil, d.dec, id)
+func (d *diskutilMonterey) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
+	return info(ctx, d.embeddedDiskutil, d.dec, id)
 }
 
 // diskutilVentura wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
@@ -283,20 +284,20 @@ type diskutilVentura struct {
 
 // List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
 // output in a SystemPartitions struct.
-func (d *diskutilVentura) List(args []string) (*types.SystemPartitions, error) {
-	return list(d.embeddedDiskutil, d.dec, args)
+func (d *diskutilVentura) List(ctx context.Context, args []string) (*types.SystemPartitions, error) {
+	return list(ctx, d.embeddedDiskutil, d.dec, args)
 }
 
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
-func (d *diskutilVentura) Info(id string) (*types.DiskInfo, error) {
-	return info(d.embeddedDiskutil, d.dec, id)
+func (d *diskutilVentura) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
+	return info(ctx, d.embeddedDiskutil, d.dec, id)
 }
 
 // info is a wrapper that fetches the raw diskutil info data and decodes it into a usable types.DiskInfo struct.
-func info(util UtilImpl, decoder Decoder, id string) (*types.DiskInfo, error) {
+func info(ctx context.Context, util UtilImpl, decoder Decoder, id string) (*types.DiskInfo, error) {
 	// Fetch the raw disk information from the util
-	rawDisk, err := util.Info(id)
+	rawDisk, err := util.Info(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -314,9 +315,9 @@ func info(util UtilImpl, decoder Decoder, id string) (*types.DiskInfo, error) {
 }
 
 // list is a wrapper that fetches the raw diskutil list data and decodes it into a usable types.SystemPartitions struct.
-func list(util UtilImpl, decoder Decoder, args []string) (*types.SystemPartitions, error) {
+func list(ctx context.Context, util UtilImpl, decoder Decoder, args []string) (*types.SystemPartitions, error) {
 	// Fetch the raw list information from the util
-	rawPartitions, err := util.List(args)
+	rawPartitions, err := util.List(ctx, args)
 	if err != nil {
 		return nil, err
 	}

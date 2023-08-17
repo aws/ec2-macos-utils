@@ -1,6 +1,7 @@
 package diskutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -11,12 +12,12 @@ import (
 )
 
 // GrowContainer grows a container to its maximum size by performing the following operations:
-// 		1. Verify that the given types.DiskInfo is an APFS container that can be resized.
-//		2. Fetch the types.DiskInfo for the underlying physical disk (if the container isn't a physical device).
-//		3. Repair the parent disk to force the kernel to get the latest GPT information for the disk.
-//		4. Check if there's enough free space on the disk to perform an APFS.ResizeContainer.
-//		5. Resize the container to its maximum size.
-func GrowContainer(u DiskUtil, container *types.DiskInfo) error {
+//  1. Verify that the given types.DiskInfo is an APFS container that can be resized.
+//  2. Fetch the types.DiskInfo for the underlying physical disk (if the container isn't a physical device).
+//  3. Repair the parent disk to force the kernel to get the latest GPT information for the disk.
+//  4. Check if there's enough free space on the disk to perform an APFS.ResizeContainer.
+//  5. Resize the container to its maximum size.
+func GrowContainer(ctx context.Context, u DiskUtil, container *types.DiskInfo) error {
 	if container == nil {
 		return fmt.Errorf("unable to resize nil container")
 	}
@@ -32,7 +33,7 @@ func GrowContainer(u DiskUtil, container *types.DiskInfo) error {
 	// container).
 	phy := container
 	if !phy.IsPhysical() {
-		parent, err := u.Info(phy.ParentWholeDisk)
+		parent, err := u.Info(ctx, phy.ParentWholeDisk)
 		if err != nil {
 			return fmt.Errorf("unable to determine physical disk: %w", err)
 		}
@@ -42,7 +43,7 @@ func GrowContainer(u DiskUtil, container *types.DiskInfo) error {
 
 	// Capture any free space on a resized disk
 	logrus.Info("Repairing the parent disk...")
-	_, err := repairParentDisk(u, phy)
+	_, err := repairParentDisk(ctx, u, phy)
 	if err != nil {
 		return fmt.Errorf("cannot update free space on disk: %w", err)
 	}
@@ -50,7 +51,7 @@ func GrowContainer(u DiskUtil, container *types.DiskInfo) error {
 
 	// Minimum free space to resize required - bail if we don't have enough.
 	logrus.WithField("device_id", phy.DeviceIdentifier).Info("Fetching amount of free space on device...")
-	totalFree, err := getDiskFreeSpace(u, phy)
+	totalFree, err := getDiskFreeSpace(ctx, u, phy)
 	if err != nil {
 		return fmt.Errorf("cannot determine available space on disk: %w", err)
 	}
@@ -67,7 +68,7 @@ func GrowContainer(u DiskUtil, container *types.DiskInfo) error {
 		"device_id":  phy.DeviceIdentifier,
 		"free_space": humanize.Bytes(totalFree),
 	}).Info("Resizing container to maximum size...")
-	out, err := u.ResizeContainer(phy.DeviceIdentifier, "0")
+	out, err := u.ResizeContainer(ctx, phy.DeviceIdentifier, "0")
 	logrus.WithField("out", out).Debug("Resize output")
 	if errors.Is(err, ErrReadOnly) {
 		logrus.WithError(err).Warn("Would have resized container to max size")
@@ -103,8 +104,8 @@ func canAPFSResize(disk *types.DiskInfo) error {
 
 // getDiskFreeSpace calculates the amount of free space a disk has available by summing the sizes of each partition
 // and then subtracting that from the total size. See types.SystemPartitions for more information.
-func getDiskFreeSpace(util DiskUtil, disk *types.DiskInfo) (uint64, error) {
-	partitions, err := util.List(nil)
+func getDiskFreeSpace(ctx context.Context, util DiskUtil, disk *types.DiskInfo) (uint64, error) {
+	partitions, err := util.List(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -119,7 +120,7 @@ func getDiskFreeSpace(util DiskUtil, disk *types.DiskInfo) (uint64, error) {
 
 // repairParentDisk attempts to find and repair the parent device for the given disk in order to update the current
 // amount of free space available.
-func repairParentDisk(utility DiskUtil, disk *types.DiskInfo) (message string, err error) {
+func repairParentDisk(ctx context.Context, utility DiskUtil, disk *types.DiskInfo) (message string, err error) {
 	// Get the device identifier for the parent disk
 	parentDiskID, err := disk.ParentDeviceID()
 	if err != nil {
@@ -128,7 +129,7 @@ func repairParentDisk(utility DiskUtil, disk *types.DiskInfo) (message string, e
 
 	// Attempt to repair the container's parent disk
 	logrus.WithField("parent_id", parentDiskID).Info("Repairing parent disk...")
-	out, err := utility.RepairDisk(parentDiskID)
+	out, err := utility.RepairDisk(ctx, parentDiskID)
 	logrus.WithField("out", out).Debug("RepairDisk output")
 	if errors.Is(err, ErrReadOnly) {
 		logrus.WithError(err).Warn("Would have repaired parent disk")

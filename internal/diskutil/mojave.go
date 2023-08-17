@@ -1,6 +1,7 @@
 package diskutil
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
@@ -9,13 +10,13 @@ import (
 )
 
 // updatePhysicalStores provides separate functionality for fetching APFS physical stores for SystemPartitions.
-func updatePhysicalStores(partitions *types.SystemPartitions) error {
+func updatePhysicalStores(ctx context.Context, partitions *types.SystemPartitions) error {
 	// Independently update all APFS disks' physical stores
 	for i, part := range partitions.AllDisksAndPartitions {
 		// Only do the update if the disk/partition is APFS
 		if isAPFSVolume(part) {
 			// Fetch the physical store for the disk/partition
-			physicalStoreId, err := fetchPhysicalStore(part.DeviceIdentifier)
+			physicalStoreId, err := fetchPhysicalStore(ctx, part.DeviceIdentifier)
 			if err != nil {
 				return err
 			}
@@ -39,13 +40,13 @@ func isAPFSVolume(part types.DiskPart) bool {
 // fetchPhysicalStore parses the human-readable output of the list verb for the given ID in order to fetch its
 // physical store. This function is limited to returning only one physical store so the behavior might cause problems
 // for fusion devices that have more than one APFS physical store.
-func fetchPhysicalStore(id string) (string, error) {
+func fetchPhysicalStore(ctx context.Context, id string) (string, error) {
 	// Create the command for running diskutil and parsing the output to retrieve the desired info (physical store)
 	//   * list - specifies the diskutil 'list' verb for a specific device ID and returns the human-readable output
 	cmdPhysicalStore := []string{"diskutil", "list", id}
 
 	// Execute the command to parse output from diskutil list
-	out, err := util.ExecuteCommand(cmdPhysicalStore, "", nil, nil)
+	out, err := util.ExecuteCommand(ctx, cmdPhysicalStore, "", nil, nil)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", out.Stderr, err)
 	}
@@ -69,9 +70,9 @@ func parsePhysicalStoreId(raw string) (string, error) {
 }
 
 // updatePhysicalStore provides separate functionality for fetching APFS physical stores for DiskInfo.
-func updatePhysicalStore(disk *types.DiskInfo) error {
+func updatePhysicalStore(ctx context.Context, disk *types.DiskInfo) error {
 	if isAPFSMedia(disk) {
-		physicalStoreId, err := fetchPhysicalStore(disk.DeviceIdentifier)
+		physicalStoreId, err := fetchPhysicalStore(ctx, disk.DeviceIdentifier)
 		if err != nil {
 			return err
 		}
