@@ -16,9 +16,10 @@ ec2-macos-utils grow [flags]
 ### Options
 
 ```
-      --dry-run     run command without mutating changes
-  -h, --help        help for grow
-      --id string   container identifier to be resized or "root"
+      --dry-run            run command without mutating changes
+  -h, --help               help for grow
+      --id string          container identifier to be resized or "root"
+      --timeout duration   Set the timeout for the command (e.g. 30s, 1m, 1.5h), 0s will disable the timeout (default 5m0s)
 ```
 
 ### Options inherited from parent commands
