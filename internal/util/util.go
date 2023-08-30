@@ -2,6 +2,7 @@ package util
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -19,7 +20,7 @@ type CommandOutput struct {
 }
 
 // ExecuteCommand executes the command and returns Stdout and Stderr as strings.
-func ExecuteCommand(c []string, runAsUser string, envVars []string, stdin io.ReadCloser) (output CommandOutput, err error) {
+func ExecuteCommand(ctx context.Context, c []string, runAsUser string, envVars []string, stdin io.ReadCloser) (output CommandOutput, err error) {
 	// Separate name and args, plus catch a few error cases
 	var name string
 	var args []string
@@ -36,7 +37,7 @@ func ExecuteCommand(c []string, runAsUser string, envVars []string, stdin io.Rea
 	}
 
 	// Set command and create output buffers
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(ctx, name, args...)
 	var stdoutb, stderrb bytes.Buffer
 	cmd.Stdout = &stdoutb
 	cmd.Stderr = &stderrb
@@ -74,7 +75,7 @@ func ExecuteCommand(c []string, runAsUser string, envVars []string, stdin io.Rea
 }
 
 // ExecuteCommandYes wraps ExecuteCommand with the yes binary in order to bypass user input states in automation.
-func ExecuteCommandYes(c []string, runAsUser string, envVars []string) (output CommandOutput, err error) {
+func ExecuteCommandYes(ctx context.Context, c []string, runAsUser string, envVars []string) (output CommandOutput, err error) {
 	// Set exec commands, one for yes and another for the specified command
 	cmdYes := exec.Command("/usr/bin/yes")
 
@@ -89,7 +90,7 @@ func ExecuteCommandYes(c []string, runAsUser string, envVars []string) (output C
 		return CommandOutput{}, fmt.Errorf("error starting /usr/bin/yes command: %w", err)
 	}
 
-	return ExecuteCommand(c, runAsUser, envVars, stdin)
+	return ExecuteCommand(ctx, c, runAsUser, envVars, stdin)
 }
 
 // getUIDandGID takes a username and returns the uid and gid for that user.
@@ -102,7 +103,7 @@ func getUIDandGID(username string) (uid int, gid int, err error) {
 	u, lookuperr := user.Lookup(username)
 	if lookuperr != nil {
 		// user.Lookup() has failed, second try by checking the DS cache
-		out, cmderr := ExecuteCommand([]string{"dscacheutil", "-q", "user", "-a", "name", username}, "", []string{}, nil)
+		out, cmderr := ExecuteCommand(context.Background(), []string{"dscacheutil", "-q", "user", "-a", "name", username}, "", []string{}, nil)
 		if cmderr != nil {
 			// dscacheutil has failed with an error
 			return 0, 0, fmt.Errorf("error while looking up user %s: \n"+

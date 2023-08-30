@@ -1,6 +1,7 @@
 package diskutil
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"testing"
@@ -23,7 +24,7 @@ func TestGrowContainer_WithoutContainer(t *testing.T) {
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
 
-	err := GrowContainer(mockUtility, nil)
+	err := GrowContainer(context.Background(), mockUtility, nil)
 
 	assert.Error(t, err, "shouldn't be able to grow container with nil container")
 }
@@ -36,19 +37,20 @@ func TestGrowContainer_WithEmptyContainer(t *testing.T) {
 
 	disk := types.DiskInfo{}
 
-	err := GrowContainer(mockUtility, &disk)
+	err := GrowContainer(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to grow container with empty container")
 }
 
 func TestGrowContainer_WithInfoErr(t *testing.T) {
 	const testDiskID = "disk1"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-	mockUtility.EXPECT().Info(testDiskID).Return(nil, fmt.Errorf("error"))
+	mockUtility.EXPECT().Info(ctx, testDiskID).Return(nil, fmt.Errorf("error"))
 
 	disk := types.DiskInfo{
 		ContainerInfo: types.ContainerInfo{
@@ -58,19 +60,20 @@ func TestGrowContainer_WithInfoErr(t *testing.T) {
 		VirtualOrPhysical: "Virtual",
 	}
 
-	err := GrowContainer(mockUtility, &disk)
+	err := GrowContainer(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to grow container with info error")
 }
 
 func TestGrowContainer_WithRepairDiskErr(t *testing.T) {
 	const testDiskID = "disk1"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-	mockUtility.EXPECT().RepairDisk(testDiskID).Return("", fmt.Errorf("error"))
+	mockUtility.EXPECT().RepairDisk(ctx, testDiskID).Return("", fmt.Errorf("error"))
 
 	disk := types.DiskInfo{
 		APFSPhysicalStores: []types.APFSPhysicalStore{
@@ -83,21 +86,22 @@ func TestGrowContainer_WithRepairDiskErr(t *testing.T) {
 		VirtualOrPhysical: "Physical",
 	}
 
-	err := GrowContainer(mockUtility, &disk)
+	err := GrowContainer(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to grow container with repair disk error")
 }
 
 func TestGrowContainer_WithListError(t *testing.T) {
 	const testDiskID = "disk1"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
-		mockUtility.EXPECT().List(nil).Return(nil, fmt.Errorf("error")),
+		mockUtility.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(ctx, nil).Return(nil, fmt.Errorf("error")),
 	)
 
 	disk := types.DiskInfo{
@@ -111,7 +115,7 @@ func TestGrowContainer_WithListError(t *testing.T) {
 		VirtualOrPhysical: "Physical",
 	}
 
-	err := GrowContainer(mockUtility, &disk)
+	err := GrowContainer(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to grow container with list error")
 }
@@ -126,6 +130,7 @@ func TestGrowContainer_WithoutFreeSpace(t *testing.T) {
 		// expected amount of free space
 		expectedFreeSpace = 0
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -145,8 +150,8 @@ func TestGrowContainer_WithoutFreeSpace(t *testing.T) {
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
-		mockUtility.EXPECT().List(nil).Return(&parts, nil),
+		mockUtility.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(ctx, nil).Return(&parts, nil),
 	)
 
 	disk := types.DiskInfo{
@@ -162,7 +167,7 @@ func TestGrowContainer_WithoutFreeSpace(t *testing.T) {
 
 	expectedErr := fmt.Errorf("not enough space to resize container: %w", FreeSpaceError{expectedFreeSpace})
 
-	actualErr := GrowContainer(mockUtility, &disk)
+	actualErr := GrowContainer(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, actualErr, "shouldn't be able to grow container without free space")
 	assert.Equal(t, expectedErr, actualErr, "should get FreeSpaceError since there's no free space")
@@ -176,6 +181,7 @@ func TestGrowContainer_WithResizeContainerError(t *testing.T) {
 		// individual partition space occupied
 		partSize uint64 = 500_000
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -195,9 +201,9 @@ func TestGrowContainer_WithResizeContainerError(t *testing.T) {
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
-		mockUtility.EXPECT().List(nil).Return(&parts, nil),
-		mockUtility.EXPECT().ResizeContainer(testDiskID, "0").Return("", fmt.Errorf("error")),
+		mockUtility.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mockUtility.EXPECT().ResizeContainer(ctx, testDiskID, "0").Return("", fmt.Errorf("error")),
 	)
 
 	disk := types.DiskInfo{
@@ -212,7 +218,7 @@ func TestGrowContainer_WithResizeContainerError(t *testing.T) {
 		VirtualOrPhysical: "Physical",
 	}
 
-	err := GrowContainer(mockUtility, &disk)
+	err := GrowContainer(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to grow container with resize container error")
 }
@@ -225,6 +231,7 @@ func TestGrowContainer_Success(t *testing.T) {
 		// individual partition space occupied
 		partSize uint64 = 500_000
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -244,9 +251,9 @@ func TestGrowContainer_Success(t *testing.T) {
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
 	gomock.InOrder(
-		mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil),
-		mockUtility.EXPECT().List(nil).Return(&parts, nil),
-		mockUtility.EXPECT().ResizeContainer(testDiskID, "0").Return("", nil),
+		mockUtility.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil),
+		mockUtility.EXPECT().List(ctx, nil).Return(&parts, nil),
+		mockUtility.EXPECT().ResizeContainer(ctx, testDiskID, "0").Return("", nil),
 	)
 
 	disk := types.DiskInfo{
@@ -261,7 +268,7 @@ func TestGrowContainer_Success(t *testing.T) {
 		VirtualOrPhysical: "Physical",
 	}
 
-	err := GrowContainer(mockUtility, &disk)
+	err := GrowContainer(context.Background(), mockUtility, &disk)
 
 	assert.NoError(t, err, "should be able to grow container")
 }
@@ -357,16 +364,17 @@ func TestCanAPFSResize(t *testing.T) {
 
 func TestGetDiskFreeSpace_WithListErr(t *testing.T) {
 	const expectedSize uint64 = 0
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-	mockUtility.EXPECT().List(nil).Return(nil, fmt.Errorf("error"))
+	mockUtility.EXPECT().List(ctx, nil).Return(nil, fmt.Errorf("error"))
 
 	disk := types.DiskInfo{}
 
-	actual, err := getDiskFreeSpace(mockUtility, &disk)
+	actual, err := getDiskFreeSpace(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to get free space with list error")
 	assert.Equal(t, expectedSize, actual, "shouldn't get size due to list error")
@@ -374,16 +382,17 @@ func TestGetDiskFreeSpace_WithListErr(t *testing.T) {
 
 func TestGetDiskFreeSpace_WithNilSystemPartitions(t *testing.T) {
 	const expectedSize uint64 = 0
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-	mockUtility.EXPECT().List(nil).Return(nil, nil)
+	mockUtility.EXPECT().List(ctx, nil).Return(nil, nil)
 
 	disk := types.DiskInfo{}
 
-	actual, err := getDiskFreeSpace(mockUtility, &disk)
+	actual, err := getDiskFreeSpace(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to get free space for nil partitions")
 	assert.Equal(t, expectedSize, actual, "shouldn't get size due to nil partitions")
@@ -399,6 +408,7 @@ func TestGetDiskFreeSpace_WithoutFreeSpace(t *testing.T) {
 		// should see: diskSize - (2 * partSize)
 		expectedFreeSpace uint64 = 0
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -417,7 +427,7 @@ func TestGetDiskFreeSpace_WithoutFreeSpace(t *testing.T) {
 			},
 		},
 	}
-	mockUtility.EXPECT().List(nil).Return(&parts, nil)
+	mockUtility.EXPECT().List(ctx, nil).Return(&parts, nil)
 
 	disk := types.DiskInfo{
 		APFSPhysicalStores: []types.APFSPhysicalStore{
@@ -425,7 +435,7 @@ func TestGetDiskFreeSpace_WithoutFreeSpace(t *testing.T) {
 		},
 	}
 
-	actual, err := getDiskFreeSpace(mockUtility, &disk)
+	actual, err := getDiskFreeSpace(context.Background(), mockUtility, &disk)
 
 	assert.NoError(t, err, "should be able to calculate free space with valid data")
 	assert.Equal(t, expectedFreeSpace, actual, "should have calculated free space based on partitions")
@@ -441,6 +451,7 @@ func TestGetDiskFreeSpace_FreeSpace(t *testing.T) {
 		// should see: diskSize - (2 * partSize)
 		expectedFreeSpace uint64 = 1_000_000
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -459,7 +470,7 @@ func TestGetDiskFreeSpace_FreeSpace(t *testing.T) {
 			},
 		},
 	}
-	mockUtility.EXPECT().List(nil).Return(&parts, nil)
+	mockUtility.EXPECT().List(ctx, nil).Return(&parts, nil)
 
 	disk := types.DiskInfo{
 		APFSPhysicalStores: []types.APFSPhysicalStore{
@@ -467,7 +478,7 @@ func TestGetDiskFreeSpace_FreeSpace(t *testing.T) {
 		},
 	}
 
-	actual, err := getDiskFreeSpace(mockUtility, &disk)
+	actual, err := getDiskFreeSpace(context.Background(), mockUtility, &disk)
 
 	assert.NoError(t, err, "should be able to calculate free space with valid data")
 	assert.Equal(t, expectedFreeSpace, actual, "should have calculated free space based on partitions")
@@ -482,7 +493,7 @@ func TestRepairParentDisk_WithoutDiskInfo(t *testing.T) {
 	disk := types.DiskInfo{}
 	expectedMessage := fmt.Sprintf("failed to get the parent disk ID for container [%s]", disk.DeviceIdentifier)
 
-	actualMessage, err := repairParentDisk(mockUtility, &disk)
+	actualMessage, err := repairParentDisk(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to repair disk without disk info")
 	assert.Equal(t, expectedMessage, actualMessage, "should see error message for device")
@@ -490,12 +501,13 @@ func TestRepairParentDisk_WithoutDiskInfo(t *testing.T) {
 
 func TestRepairParentDisk_WithRepairDiskErr(t *testing.T) {
 	const testDiskID = "disk0"
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-	mockUtility.EXPECT().RepairDisk(testDiskID).Return("error", fmt.Errorf("error"))
+	mockUtility.EXPECT().RepairDisk(ctx, testDiskID).Return("error", fmt.Errorf("error"))
 
 	disk := types.DiskInfo{
 		APFSPhysicalStores: []types.APFSPhysicalStore{
@@ -504,7 +516,7 @@ func TestRepairParentDisk_WithRepairDiskErr(t *testing.T) {
 	}
 	expectedMessage := "error"
 
-	actualMessage, err := repairParentDisk(mockUtility, &disk)
+	actualMessage, err := repairParentDisk(context.Background(), mockUtility, &disk)
 
 	assert.Error(t, err, "shouldn't be able to repair parent disk with repair disk error")
 	assert.Equal(t, expectedMessage, actualMessage, "should see error message for device")
@@ -515,12 +527,13 @@ func TestRepairParentDisk_Success(t *testing.T) {
 		testDiskID      = "disk0"
 		expectedMessage = ""
 	)
+	var ctx = context.Background()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUtility := mock_diskutil.NewMockDiskUtil(ctrl)
-	mockUtility.EXPECT().RepairDisk(testDiskID).Return("", nil)
+	mockUtility.EXPECT().RepairDisk(ctx, testDiskID).Return("", nil)
 
 	disk := types.DiskInfo{
 		APFSPhysicalStores: []types.APFSPhysicalStore{
@@ -528,7 +541,7 @@ func TestRepairParentDisk_Success(t *testing.T) {
 		},
 	}
 
-	actualMessage, err := repairParentDisk(mockUtility, &disk)
+	actualMessage, err := repairParentDisk(context.Background(), mockUtility, &disk)
 
 	assert.NoError(t, err, "should be able to repair parent with valid data")
 	assert.Equal(t, expectedMessage, actualMessage, "should see expected message")
