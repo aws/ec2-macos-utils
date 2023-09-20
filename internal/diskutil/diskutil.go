@@ -99,6 +99,8 @@ func ForProduct(p *system.Product) (DiskUtil, error) {
 		return newMonterey(p.Version)
 	case system.Ventura:
 		return newVentura(p.Version)
+	case system.Sonoma:
+		return newSonoma(p.Version)
 	default:
 		return nil, errors.New("unknown release")
 	}
@@ -147,6 +149,16 @@ func newMonterey(version semver.Version) (*diskutilMonterey, error) {
 // newVentura configures the DiskUtil for the specified Ventura version.
 func newVentura(version semver.Version) (*diskutilMonterey, error) {
 	du := &diskutilMonterey{
+		embeddedDiskutil: &DiskUtilityCmd{},
+		dec:              &PlistDecoder{},
+	}
+
+	return du, nil
+}
+
+// newSonoma configures the DiskUtil for the specified Sonoma version.
+func newSonoma(version semver.Version) (*diskutilSonoma, error) {
+	du := &diskutilSonoma{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
 	}
@@ -291,6 +303,27 @@ func (d *diskutilVentura) List(ctx context.Context, args []string) (*types.Syste
 // Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
 // output in a DiskInfo struct.
 func (d *diskutilVentura) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
+	return info(ctx, d.embeddedDiskutil, d.dec, id)
+}
+
+// diskutilSonoma wraps all the functionality necessary for interacting with macOS's diskutil in GoLang.
+type diskutilSonoma struct {
+	// embeddedDiskutil provides the diskutil implementation to prevent manual wiring between UtilImpl and DiskUtil.
+	embeddedDiskutil
+
+	// dec is the Decoder used to decode the raw output from UtilImpl into usable structs.
+	dec Decoder
+}
+
+// List utilizes the UtilImpl.List method to fetch the raw list output from diskutil and returns the decoded
+// output in a SystemPartitions struct.
+func (d *diskutilSonoma) List(ctx context.Context, args []string) (*types.SystemPartitions, error) {
+	return list(ctx, d.embeddedDiskutil, d.dec, args)
+}
+
+// Info utilizes the UtilImpl.Info method to fetch the raw disk output from diskutil and returns the decoded
+// output in a DiskInfo struct.
+func (d *diskutilSonoma) Info(ctx context.Context, id string) (*types.DiskInfo, error) {
 	return info(ctx, d.embeddedDiskutil, d.dec, id)
 }
 
