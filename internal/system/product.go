@@ -17,6 +17,7 @@ const (
 	Monterey
 	Ventura
 	Sonoma
+	Sequoia
 	CompatMode
 )
 
@@ -34,6 +35,8 @@ func (r Release) String() string {
 		return "Ventura"
 	case Sonoma:
 		return "Sonoma"
+	case Sequoia:
+		return "Sequoia"
 	case CompatMode:
 		return "Compatability Mode"
 	default:
@@ -54,6 +57,8 @@ var (
 	venturaConstraints = mustInitConstraint(semver.NewConstraint("~13"))
 	// sonomaConstraints are the constraints used to identify Sonoma versions (14.x.x).
 	sonomaConstraints = mustInitConstraint(semver.NewConstraint("~14"))
+	// sequoiaConstraints are the constraints used to identify Sequoia versions (15.x.x).
+	sequoiaConstraints = mustInitConstraint(semver.NewConstraint("~15"))
 	// compatModeConstraints are the constraints used to identify macOS Big Sur and later. This version is returned
 	// when the system is in compat mode (SYSTEM_VERSION_COMPAT=1).
 	compatModeConstraints = mustInitConstraint(semver.NewConstraint("~10.16"))
@@ -110,6 +115,8 @@ func getVersionRelease(version semver.Version) Release {
 		return Ventura
 	case sonomaConstraints.Check(&version):
 		return Sonoma
+	case sequoiaConstraints.Check(&version):
+		return Sequoia
 	case compatModeConstraints.Check(&version):
 		return CompatMode
 	default:
