@@ -39,9 +39,16 @@ func (p *SystemPartitions) AvailableDiskSpace(id string) (uint64, error) {
 	return target.Size - allocated, nil
 }
 
-// APFSPhysicalStoreID represents the physical device usually relating to synthesized virtual devices.
+// APFSPhysicalStoreID represents the physical device usually relating
+// to synthesized virtual devices.
 type APFSPhysicalStoreID struct {
 	DeviceIdentifier string `plist:"DeviceIdentifier"`
+}
+
+func NewAPFSPhysicalStoreID(deviceID string) *APFSPhysicalStoreID {
+	return &APFSPhysicalStoreID{
+		DeviceIdentifier: deviceID,
+	}
 }
 
 // DiskPart represents a subset of information from DiskInfo.

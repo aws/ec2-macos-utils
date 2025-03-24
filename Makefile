@@ -81,3 +81,6 @@ imports: $(GOFILES)
 .PHONY: imports-check
 imports-check:
 	$(GOIMPORTS) -e -l -d .
+
+ci-%:
+	$(MAKE) -f ci/Makefile --include-dir ci $(@)

@@ -88,8 +88,8 @@ func canAPFSResize(disk *types.DiskInfo) error {
 	}
 
 	// If the disk has ContainerInfo, check the FilesystemType
-	if (disk.ContainerInfo != types.ContainerInfo{}) {
-		if disk.ContainerInfo.FilesystemType == "apfs" {
+	if containerInfo := disk.ContainerInfo; (containerInfo != types.ContainerInfo{}) {
+		if containerInfo.FilesystemType == "apfs" {
 			return nil
 		}
 	}

@@ -16,16 +16,18 @@ func updatePhysicalStores(ctx context.Context, partitions *types.SystemPartition
 		// Only do the update if the disk/partition is APFS
 		if isAPFSVolume(part) {
 			// Fetch the physical store for the disk/partition
-			physicalStoreId, err := fetchPhysicalStore(ctx, part.DeviceIdentifier)
+			physicalStoreDeviceID, err := fetchPhysicalStore(ctx, part.DeviceIdentifier)
 			if err != nil {
 				return err
 			}
 
 			// Create a new physical store from the output
-			physicalStore := types.APFSPhysicalStoreID{physicalStoreId}
+			physicalStoreElement := types.APFSPhysicalStoreID{
+				DeviceIdentifier: physicalStoreDeviceID,
+			}
 
 			// Add the physical store to the DiskInfo
-			partitions.AllDisksAndPartitions[i].APFSPhysicalStores = append(part.APFSPhysicalStores, physicalStore)
+			partitions.AllDisksAndPartitions[i].APFSPhysicalStores = append(part.APFSPhysicalStores, physicalStoreElement)
 		}
 	}
 
@@ -54,14 +56,16 @@ func fetchPhysicalStore(ctx context.Context, id string) (string, error) {
 	return parsePhysicalStoreId(out.Stdout)
 }
 
+var (
+	physicalStoreFieldTokenRegexp = regexp.MustCompile(`\s*Physical Store disk[0-9]+(s[0-9]+)*`)
+	physicalStoreValueDiskIDRegexp = regexp.MustCompile("disk[0-9]+(s[0-9]+)*")
+)
+
 // parsePhysicalStoreId searches a raw string for the string "Physical Store disk[0-9]+(s[0-9]+)*". The regular
 // expression "disk[0-9]+(s[0-9]+)*" matches any disk ID without the "/dev/" prefix.
 func parsePhysicalStoreId(raw string) (string, error) {
-	physicalStoreExp := regexp.MustCompile("\\s*Physical Store disk[0-9]+(s[0-9]+)*")
-	diskIdExp := regexp.MustCompile("disk[0-9]+(s[0-9]+)*")
-
-	physicalStore := physicalStoreExp.FindString(raw)
-	diskId := diskIdExp.FindString(physicalStore)
+	physicalStore := physicalStoreFieldTokenRegexp.FindString(raw)
+	diskId := physicalStoreValueDiskIDRegexp.FindString(physicalStore)
 	if diskId == "" {
 		return "", fmt.Errorf("physical store not found")
 	}
@@ -72,14 +76,16 @@ func parsePhysicalStoreId(raw string) (string, error) {
 // updatePhysicalStore provides separate functionality for fetching APFS physical stores for DiskInfo.
 func updatePhysicalStore(ctx context.Context, disk *types.DiskInfo) error {
 	if isAPFSMedia(disk) {
-		physicalStoreId, err := fetchPhysicalStore(ctx, disk.DeviceIdentifier)
+		physicalStoreDeviceID, err := fetchPhysicalStore(ctx, disk.DeviceIdentifier)
 		if err != nil {
 			return err
 		}
 
-		physicalStore := types.APFSPhysicalStore{physicalStoreId}
+		physicalStoreElement := types.APFSPhysicalStore{
+			DeviceIdentifier: physicalStoreDeviceID,
+		}
 
-		disk.APFSPhysicalStores = append(disk.APFSPhysicalStores, physicalStore)
+		disk.APFSPhysicalStores = append(disk.APFSPhysicalStores, physicalStoreElement)
 	}
 
 	return nil

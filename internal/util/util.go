@@ -51,7 +51,7 @@ func ExecuteCommand(ctx context.Context, c []string, runAsUser string, envVars [
 	if runAsUser != "" {
 		uid, gid, err := getUIDandGID(runAsUser)
 		if err != nil {
-			return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("error looking up user: %s\n", err)
+			return CommandOutput{Stdout: stdoutb.String(), Stderr: stderrb.String()}, fmt.Errorf("error looking up user: %w", err)
 		}
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}

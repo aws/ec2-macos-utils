@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"testing"
 
 	mock_diskutil "github.com/aws/ec2-macos-utils/internal/diskutil/mocks"
@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	logrus.SetOutput(ioutil.Discard)
+	logrus.SetOutput(io.Discard)
 }
 
 func TestRun_WithInfoErr(t *testing.T) {
