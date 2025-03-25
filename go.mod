@@ -10,7 +10,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.3.0
 	golang.org/x/tools v0.1.8
-	howett.net/plist v0.0.0-20201203080718-1454fab16a06
+	howett.net/plist v1.0.1
 )
 
 require (
