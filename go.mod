@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/dustin/go-humanize v1.0.0
-	github.com/golang/mock v1.3.1
+	github.com/golang/mock v1.6.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.3.0
