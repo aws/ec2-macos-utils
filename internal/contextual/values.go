@@ -6,8 +6,12 @@ import (
 	"github.com/aws/ec2-macos-utils/internal/system"
 )
 
-// productKey is used to set and retrieve context held values for Product.
-var productKey = struct{}{}
+type contextKey uint
+
+const (
+	// productKey is used to access current Product from context.
+	productKey contextKey = iota + 1
+)
 
 // WithProduct extends the context to provide a Product.
 func WithProduct(ctx context.Context, product *system.Product) context.Context {

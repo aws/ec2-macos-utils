@@ -1,0 +1,57 @@
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+  buildtest-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - name: Fetch deps
+        run: make -f ci/Makefile --include-dir ci ci-deps
+      - name: Do Build
+        run: make -f ci/Makefile --include-dir ci ci-build
+      - name: Run Tests
+        run: make -f ci/Makefile --include-dir ci ci-test
+
+  buildtest-macos:
+    needs: buildtest-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - name: Fetch deps
+        run: make -f ci/Makefile --include-dir ci ci-deps
+      - name: Do Build
+        run: make -f ci/Makefile --include-dir ci ci-build
+      - name: Run Tests
+        run: make -f ci/Makefile --include-dir ci ci-test
+
+  lint:
+    runs-on: ubuntu-latest
+    needs: buildtest-linux
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+      - name: Run Linter
+        run: make -f ci/Makefile --include-dir ci ci-lint
+

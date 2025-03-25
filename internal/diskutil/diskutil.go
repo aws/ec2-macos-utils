@@ -149,8 +149,8 @@ func newMonterey(version semver.Version) (*diskutilMonterey, error) {
 }
 
 // newVentura configures the DiskUtil for the specified Ventura version.
-func newVentura(version semver.Version) (*diskutilMonterey, error) {
-	du := &diskutilMonterey{
+func newVentura(version semver.Version) (*diskutilVentura, error) {
+	du := &diskutilVentura{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
 	}

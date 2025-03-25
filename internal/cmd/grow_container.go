@@ -47,7 +47,7 @@ with its identifier (e.g. disk1 or /dev/disk1). The string
 	cmd.PersistentFlags().StringVar(&growArgs.id, "id", "", `container identifier to be resized or "root"`)
 	cmd.PersistentFlags().BoolVar(&growArgs.dryrun, "dry-run", false, "run command without mutating changes")
 	cmd.PersistentFlags().DurationVar(&growArgs.timeout, "timeout", growDefaultTimeout, "Set the timeout for the command (e.g. 30s, 1m, 1.5h), 0s will disable the timeout")
-	cmd.MarkPersistentFlagRequired("id")
+	_ = cmd.MarkPersistentFlagRequired("id")
 
 	// Set up the command's pre-run to check for root permissions.
 	// This is necessary since diskutil repairDisk requires root permissions to run.
@@ -56,8 +56,10 @@ with its identifier (e.g. disk1 or /dev/disk1). The string
 	// Set up the command's run function
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		if growArgs.timeout != 0 {
-			ctx, _ = context.WithTimeout(ctx, growArgs.timeout)
+		if growArgs.timeout > 0 {
+			timeoutBoundCtx, cancel := context.WithTimeout(ctx, growArgs.timeout)
+			defer cancel()
+			ctx = timeoutBoundCtx
 		}
 
 		product := contextual.Product(ctx)
