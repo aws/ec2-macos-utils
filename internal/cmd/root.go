@@ -22,6 +22,7 @@ func MainCommand() *cobra.Command {
 
 	cmds := []*cobra.Command{
 		growContainerCommand(),
+		checkCommand(),
 	}
 	for i := range cmds {
 		cmd.AddCommand(cmds[i])

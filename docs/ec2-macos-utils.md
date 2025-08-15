@@ -18,5 +18,6 @@ help text and usages that accompany them.
 
 ### SEE ALSO
 
+* [ec2-macos-utils check](ec2-macos-utils_check.md)	 - run various system checks
 * [ec2-macos-utils grow](ec2-macos-utils_grow.md)	 - resize container to max size
 
