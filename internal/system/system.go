@@ -1,10 +1,14 @@
 package system
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"strings"
 
 	"howett.net/plist"
 )
@@ -77,7 +81,7 @@ func (v *VersionInfo) Product() (*Product, error) {
 func decodeVersionInfo(reader io.ReadSeeker) (*VersionInfo, error) {
 	// Decode the system version plist into the VersionInfo struct
 	var version VersionInfo
-	decoder := plist.NewDecoder(reader)	
+	decoder := plist.NewDecoder(reader)
 	if err := decoder.Decode(&version); err != nil {
 		return nil, fmt.Errorf("system failed to decode contents of reader: %w", err)
 	}
@@ -117,4 +121,58 @@ func readProductVersionFile(path string) (*VersionInfo, error) {
 		return nil, err
 	}
 	return version, nil
+}
+
+// GetHostIOPlatformUUID retrieves the host's platform UUID
+// which is unique for each Mac device
+func GetHostIOPlatformUUID() (string, error) {
+	out, err := queryIORegistryPlatformEntry()
+	if err != nil {
+		return "", err
+	}
+	return parseIOPlatformUUID(out)
+}
+
+// queryIORegistryPlatformEntry executes the ioreg command and returns its output
+func queryIORegistryPlatformEntry() ([]byte, error) {
+	cmd := exec.Command("ioreg", "-d1", "-c", "IOPlatformExpertDevice", "-r", "-w0")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("ioreg query: %w", err)
+	}
+	return out, nil
+}
+
+// parseIOPlatformUUID extracts the platform UUID from ioreg output
+func parseIOPlatformUUID(data []byte) (string, error) {
+	// platformUUIDKeyToken is the key identifier used to locate the IOPlatformUUID
+	const platformUUIDKeyToken = `"IOPlatformUUID"`
+
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, platformUUIDKeyToken) {
+			continue
+		}
+
+		// Parse the line containing UUID
+		fields := strings.Fields(strings.ReplaceAll(line, `"`, ""))
+		if len(fields) != 3 {
+			continue
+		}
+		key, uuid := fields[0], fields[2]
+		if key != strings.Trim(platformUUIDKeyToken, `"`) {
+			continue
+		}
+
+		if uuid != "" {
+			return uuid, nil
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error scanning ioreg output: %w", err)
+	}
+
+	return "", errors.New("UUID not found in ioreg output")
 }

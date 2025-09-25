@@ -21,4 +21,5 @@ help text and usages that accompany them.
 * [ec2-macos-utils check](ec2-macos-utils_check.md)	 - run various system checks
 * [ec2-macos-utils debug](ec2-macos-utils_debug.md)	 - debug utilities for EC2 macOS instances
 * [ec2-macos-utils grow](ec2-macos-utils_grow.md)	 - resize container to max size
+* [ec2-macos-utils watchdog](ec2-macos-utils_watchdog.md)	 - monitor system health
 
