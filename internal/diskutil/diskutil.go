@@ -105,6 +105,8 @@ func ForProduct(p *system.Product) (DiskUtil, error) {
 		return newSequoia(p.Version)
 	case system.Tahoe:
 		return newTahoe(p.Version)
+	case system.GoldenGate:
+		return newGoldenGate(p.Version)
 	default:
 		return nil, errors.New("unknown release")
 	}
@@ -182,6 +184,16 @@ func newSequoia(version semver.Version) (*diskutilSonoma, error) {
 
 // newTahoe configures the DiskUtil for the specified Tahoe version.
 func newTahoe(version semver.Version) (*diskutilSonoma, error) {
+	du := &diskutilSonoma{
+		embeddedDiskutil: &DiskUtilityCmd{},
+		dec:              &PlistDecoder{},
+	}
+
+	return du, nil
+}
+
+// newGoldenGate configures the DiskUtil for the specified Golden Gate version.
+func newGoldenGate(version semver.Version) (*diskutilSonoma, error) {
 	du := &diskutilSonoma{
 		embeddedDiskutil: &DiskUtilityCmd{},
 		dec:              &PlistDecoder{},
