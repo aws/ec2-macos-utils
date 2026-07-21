@@ -19,6 +19,7 @@ const (
 	Sonoma
 	Sequoia
 	Tahoe
+	GoldenGate
 	CompatMode
 )
 
@@ -40,6 +41,8 @@ func (r Release) String() string {
 		return "Sequoia"
 	case Tahoe:
 		return "Tahoe"
+	case GoldenGate:
+		return "Golden Gate"
 	case CompatMode:
 		return "Compatability Mode"
 	default:
@@ -64,6 +67,8 @@ var (
 	sequoiaConstraints = mustInitConstraint(semver.NewConstraint("~15"))
 	// tahoeConstraints are the constraints used to identify Tahoe versions (26.x.x).
 	tahoeConstraints = mustInitConstraint(semver.NewConstraint("~26"))
+	// goldenGateConstraints are the constraints used to identify Golden Gate versions (27.x.x).
+	goldenGateConstraints = mustInitConstraint(semver.NewConstraint("~27"))
 	// compatModeConstraints are the constraints used to identify macOS Big Sur and later. This version is returned
 	// when the system is in compat mode (SYSTEM_VERSION_COMPAT=1).
 	compatModeConstraints = mustInitConstraint(semver.NewConstraint("~10.16"))
@@ -124,6 +129,8 @@ func getVersionRelease(version semver.Version) Release {
 		return Sequoia
 	case tahoeConstraints.Check(&version):
 		return Tahoe
+	case goldenGateConstraints.Check(&version):
+		return GoldenGate
 	case compatModeConstraints.Check(&version):
 		return CompatMode
 	default:
