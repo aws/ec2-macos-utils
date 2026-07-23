@@ -3,6 +3,7 @@ module github.com/aws/ec2-macos-utils
 go 1.24.0
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/Masterminds/semver v1.5.0
 	github.com/docker/go-units v0.5.0
 	github.com/dustin/go-humanize v1.0.1

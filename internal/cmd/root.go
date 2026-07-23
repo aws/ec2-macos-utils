@@ -24,6 +24,7 @@ func MainCommand() *cobra.Command {
 		growContainerCommand(),
 		checkCommand(),
 		debugCommand(),
+		systemCommand(),
 		watchdogCommand(),
 	}
 	for i := range cmds {
