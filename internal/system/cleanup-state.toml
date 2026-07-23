@@ -1,0 +1,12 @@
+# Default OS state removed by `ec2-macos-utils system cleanup-state`.
+#
+# Each [[state]] entry is a path (relative to the system root) removed before
+# an instance is imaged. To customize, place a file with this schema at
+# /usr/local/aws/ec2-macos-utils/cleanup-state.toml; it replaces these
+# defaults entirely.
+
+[[state]]
+path        = "Library/Preferences/SystemConfiguration/NetworkInterfaces.plist"
+description = "macOS cached interface configuration"
+rationale   = "affects startup health of networking for EC2 Mac instances"
+recursive   = false

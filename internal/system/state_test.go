@@ -29,12 +29,22 @@ func writeFile(t *testing.T, root string, relPath string) string {
 	return path
 }
 
+// newTestCleaner builds a cleaner that uses the embedded default config (no
+// external config path) rooted at root.
+func newTestCleaner(t *testing.T, root string, dryRun bool) *StateCleaner {
+	t.Helper()
+
+	cleaner, err := newStateCleaner(root, "", dryRun)
+	require.NoError(t, err)
+
+	return cleaner
+}
+
 func TestCleanup_RemovesKnownState(t *testing.T) {
 	root := t.TempDir()
 	path := writeFile(t, root, networkInterfacesPlist)
 
-	cleaner := newStateCleaner(root, false)
-	err := cleaner.Cleanup(context.Background())
+	err := newTestCleaner(t, root, false).Cleanup(context.Background())
 
 	assert.NoError(t, err)
 	assert.NoFileExists(t, path, "well-known state should be removed")
@@ -43,8 +53,7 @@ func TestCleanup_RemovesKnownState(t *testing.T) {
 func TestCleanup_AbsentStateIsNotError(t *testing.T) {
 	root := t.TempDir()
 
-	cleaner := newStateCleaner(root, false)
-	err := cleaner.Cleanup(context.Background())
+	err := newTestCleaner(t, root, false).Cleanup(context.Background())
 
 	assert.NoError(t, err, "cleanup should succeed when state is already absent")
 }
@@ -53,7 +62,7 @@ func TestCleanup_IsIdempotent(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, networkInterfacesPlist)
 
-	cleaner := newStateCleaner(root, false)
+	cleaner := newTestCleaner(t, root, false)
 
 	assert.NoError(t, cleaner.Cleanup(context.Background()))
 	assert.NoError(t, cleaner.Cleanup(context.Background()), "second cleanup should also succeed")
@@ -64,8 +73,7 @@ func TestCleanup_LeavesUnrelatedStateIntact(t *testing.T) {
 	writeFile(t, root, networkInterfacesPlist)
 	unrelated := writeFile(t, root, "Library/Preferences/SystemConfiguration/preferences.plist")
 
-	cleaner := newStateCleaner(root, false)
-	err := cleaner.Cleanup(context.Background())
+	err := newTestCleaner(t, root, false).Cleanup(context.Background())
 
 	assert.NoError(t, err)
 	assert.FileExists(t, unrelated, "unrelated state should not be removed")
@@ -75,8 +83,7 @@ func TestCleanup_DryRunLeavesStateIntact(t *testing.T) {
 	root := t.TempDir()
 	path := writeFile(t, root, networkInterfacesPlist)
 
-	cleaner := newStateCleaner(root, true)
-	err := cleaner.Cleanup(context.Background())
+	err := newTestCleaner(t, root, true).Cleanup(context.Background())
 
 	assert.NoError(t, err)
 	assert.FileExists(t, path, "dry-run should not remove well-known state")
@@ -91,7 +98,7 @@ func TestCleanup_RemovesSymlinkWithoutRemovingTarget(t *testing.T) {
 			require.NoError(t, os.MkdirAll(filepath.Dir(link), 0755))
 			require.NoError(t, os.Symlink(target, link))
 
-			cleaner := newStateCleaner(root, false)
+			cleaner := newTestCleaner(t, root, false)
 			cleaner.entries = []StateEntry{
 				{Path: networkInterfacesPlist, Description: "linked state", Recursive: recursive},
 			}
@@ -121,7 +128,7 @@ func TestCleanup_RecursiveControlsDirectoryRemoval(t *testing.T) {
 			const directory = "Library/Caches/test-state"
 			writeFile(t, root, filepath.Join(directory, "nested/state"))
 
-			cleaner := newStateCleaner(root, false)
+			cleaner := newTestCleaner(t, root, false)
 			cleaner.entries = []StateEntry{
 				{Path: directory, Description: "directory state", Recursive: tt.recursive},
 			}
@@ -146,8 +153,7 @@ func TestCleanup_CanceledContextLeavesStateIntact(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	cleaner := newStateCleaner(root, false)
-	err := cleaner.Cleanup(ctx)
+	err := newTestCleaner(t, root, false).Cleanup(ctx)
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.FileExists(t, path, "canceled cleanup should not remove state")
@@ -168,7 +174,7 @@ func TestCleanup_ContinuesThroughErrors(t *testing.T) {
 	// Second entry should still be removed.
 	removable := writeFile(t, root, networkInterfacesPlist)
 
-	cleaner := newStateCleaner(root, false)
+	cleaner := newTestCleaner(t, root, false)
 	cleaner.entries = []StateEntry{
 		{Path: "blocked/state", Description: "blocked state"},
 		{Path: networkInterfacesPlist, Description: "removable state"},
@@ -181,20 +187,20 @@ func TestCleanup_ContinuesThroughErrors(t *testing.T) {
 }
 
 func TestNewStateCleaner_TargetsRunningSystem(t *testing.T) {
-	cleaner := NewStateCleaner(false)
+	cleaner, err := NewStateCleaner(false)
+	require.NoError(t, err)
 
 	assert.Equal(t, "/", cleaner.targetRoot)
 	assert.NotEmpty(t, cleaner.entries)
 	assert.False(t, cleaner.dryRun)
 }
 
-func TestNewStateCleaner_ClonesEntries(t *testing.T) {
-	first := newStateCleaner(t.TempDir(), false)
-	second := newStateCleaner(t.TempDir(), false)
-	originalPath := cleanupStateEntries[0].Path
+func TestNewStateCleaner_IndependentEntries(t *testing.T) {
+	first := newTestCleaner(t, t.TempDir(), false)
+	second := newTestCleaner(t, t.TempDir(), false)
 
+	original := second.entries[0].Path
 	first.entries[0].Path = "mutated"
 
-	assert.Equal(t, originalPath, cleanupStateEntries[0].Path, "cleaner should not mutate global entries")
-	assert.Equal(t, originalPath, second.entries[0].Path, "cleaners should not share entry storage")
+	assert.Equal(t, original, second.entries[0].Path, "cleaners should not share entry storage")
 }

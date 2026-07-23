@@ -44,7 +44,13 @@ This command requires root privileges. Run with sudo if not running as root.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logrus.Info("Starting system state cleanup")
 
-			if err := system.NewStateCleaner(dryRun).Cleanup(cmd.Context()); err != nil {
+			cleaner, err := system.NewStateCleaner(dryRun)
+			if err != nil {
+				logrus.WithError(err).Error("Unable to load cleanup-state configuration")
+				return err
+			}
+
+			if err := cleaner.Cleanup(cmd.Context()); err != nil {
 				logrus.WithError(err).Error("System state cleanup failed")
 				return err
 			}

@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/sirupsen/logrus"
 )
@@ -16,23 +15,13 @@ import (
 // from an instance before it is suitable for imaging (e.g. AMI creation).
 type StateEntry struct {
 	// Path is the path of the state relative to the target system root.
-	Path string
+	Path string `toml:"path"`
 	// Description is a short, human-readable name for the state.
-	Description string
+	Description string `toml:"description"`
 	// Rationale explains why the state must be removed.
-	Rationale string
+	Rationale string `toml:"rationale"`
 	// Recursive controls whether a directory and all of its contents are removed.
-	Recursive bool
-}
-
-// cleanupStateEntries is the set of well-known OS state that is removed
-// during state cleanup.
-var cleanupStateEntries = []StateEntry{
-	{
-		Path:        "Library/Preferences/SystemConfiguration/NetworkInterfaces.plist",
-		Description: "macOS cached interface configuration",
-		Rationale:   "affects startup health of networking for EC2 Mac instances",
-	},
+	Recursive bool `toml:"recursive"`
 }
 
 // StateCleaner removes well-known OS state beneath a target system root.
@@ -50,18 +39,26 @@ type StateCleaner struct {
 }
 
 // NewStateCleaner returns a StateCleaner that cleans up the running system.
-func NewStateCleaner(dryRun bool) *StateCleaner {
-	return newStateCleaner("/", dryRun)
+// State entries are loaded from the external config if present, otherwise
+// from the embedded default; a config that cannot be loaded is an error.
+func NewStateCleaner(dryRun bool) (*StateCleaner, error) {
+	return newStateCleaner("/", defaultConfigPath, dryRun)
 }
 
 // newStateCleaner returns a StateCleaner that cleans up the system rooted at
-// the given target root.
-func newStateCleaner(targetRoot string, dryRun bool) *StateCleaner {
+// the given target root, loading state entries from configPath (or the
+// embedded default when configPath is absent).
+func newStateCleaner(targetRoot string, configPath string, dryRun bool) (*StateCleaner, error) {
+	entries, err := loadStateEntries(configPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return &StateCleaner{
 		targetRoot: targetRoot,
-		entries:    slices.Clone(cleanupStateEntries),
+		entries:    entries,
 		dryRun:     dryRun,
-	}
+	}, nil
 }
 
 // Cleanup removes each well-known OS state entry beneath the target root.
