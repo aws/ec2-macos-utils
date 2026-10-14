@@ -9,7 +9,7 @@ import (
 	mock_diskutil "github.com/aws/ec2-macos-utils/internal/diskutil/mocks"
 	"github.com/aws/ec2-macos-utils/internal/diskutil/types"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
